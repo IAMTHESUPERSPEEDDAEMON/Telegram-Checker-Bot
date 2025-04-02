@@ -1,0 +1,21 @@
+telegram_checker_bot/
+├── config/
+│   └── config.py           # Конфигурационные параметры (доступ к БД, настройки)
+├── models/
+│   ├── database.py         # Взаимодействие с MySQL
+│   ├── session_model.py    # Модель для работы с сессиями Telegram
+│   ├── proxy_model.py      # Модель для работы с прокси
+│   └── result_model.py     # Модель для хранения результатов проверки
+├── controllers/
+│   ├── bot_controller.py   # Контроллер для обработки команд бота
+│   ├── session_controller.py # Контроллер для управления сессиями
+│   ├── proxy_controller.py # Контроллер для управления прокси
+│   └── checker_controller.py # Контроллер для проверки номеров
+├── views/
+│   └── telegram_view.py    # Отправка сообщений пользователям
+├── utils/
+│   ├── csv_handler.py      # Обработка CSV файлов
+│   ├── logger.py           # Логирование
+│   └── exceptions.py       # Пользовательские исключения
+├── main.py                 # Точка входа в приложение
+└── requirements.txt        # Зависимости проекта
