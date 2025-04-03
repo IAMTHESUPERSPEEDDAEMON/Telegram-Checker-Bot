@@ -1,7 +1,9 @@
 import logging
 import os
 import csv
-from models.database import DatabaseManager
+import time
+
+from dao.database import DatabaseManager
 from config.config import TEMP_DIR
 
 
@@ -9,7 +11,7 @@ class ResultModel:
     def __init__(self):
         self.db = DatabaseManager()
 
-    def save_check_result(self, phone, full_name, telegram_id=None, username=None, user_id=None, batch_id=None):
+    def save_check_result(self, phone, full_name, telegram_id=None, username=None, user_id=None, batch_id=None, retries=3, delay=2):
         """Сохраняет результат проверки в базу данных"""
         query = """
         INSERT INTO check_results 
@@ -19,17 +21,23 @@ class ResultModel:
         has_telegram = telegram_id is not None or username is not None
         params = (phone, full_name, telegram_id, username, has_telegram, user_id)
 
-        try:
-            result_id = self.db.execute_query(query, params)
+        for attempt in range(1, retries + 1):
+            try:
+                result_id = self.db.execute_query(query, params)
 
-            # Обновляем счетчик в batch если указан batch_id
-            if batch_id and has_telegram:
-                self.increment_batch_counter(batch_id, has_telegram)
+                # Обновляем счетчик в batch если указан batch_id
+                if batch_id and has_telegram:
+                    self.increment_batch_counter(batch_id, has_telegram)
 
-            return result_id
-        except Exception as e:
-            logging.error(f"Error saving check result for phone {phone}: {e}")
-            raise
+                return result_id
+            except Exception as e:
+                logging.error(f"[Попытка {attempt}] Ошибка сохранения check_result для {phone}: {e}")
+                if attempt < retries:
+                    logging.info(f"Повтор через {delay} сек...")
+                    time.sleep(delay)  # Ждем перед новой попыткой
+                else:
+                    logging.error("Достигнуто максимальное число попыток. Операция не выполнена.")
+                    return None  # Возвращаем None вместо остановки программы
 
     def get_results_by_user(self, user_id, limit=100):
         """Получает результаты проверки для конкретного пользователя"""
@@ -45,7 +53,6 @@ class ResultModel:
             return results
         except Exception as e:
             logging.error(f"Error getting results for user {user_id}: {e}")
-            raise
 
     def create_batch(self, user_id, original_filename, total_numbers):
         """Создает новую запись о пакете проверок"""

@@ -142,7 +142,6 @@ class DatabaseManager:
         except mysql.connector.Error as err:
             logging.error(f"Error executing query: {err}")
             connection.rollback()
-            raise
         finally:
             cursor.close()
             connection.close()

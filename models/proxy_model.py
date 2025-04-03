@@ -9,7 +9,7 @@ class ProxyModel:
     def __init__(self):
         self.db = DatabaseManager()
 
-    def add_proxy(self, proxy_type, host, port, username=None, password=None):
+    def add_proxy(self, proxy_type, host, port, username, password):
         """Добавляет новый прокси в базу данных"""
         query = """
         INSERT INTO proxies 
@@ -86,8 +86,8 @@ class ProxyModel:
                 'username': proxy['username'],
                 'password': proxy['password']
             }
-        elif proxy['type'] in ('socks4', 'socks5'):
-            proxy_type = socks.SOCKS4 if proxy['type'] == 'socks4' else socks.SOCKS5
+        elif proxy['type'] == 'socks5':
+            proxy_type = socks.SOCKS5
             proxy_dict = {
                 'proxy_type': proxy_type,
                 'addr': proxy['host'],

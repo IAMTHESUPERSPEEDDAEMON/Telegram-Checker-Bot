@@ -35,7 +35,6 @@ class CSVHandler:
             }
         except Exception as e:
             logging.error(f"Error reading CSV file {file_path}: {e}")
-            raise
 
     @staticmethod
     def extract_phone_name(csv_data):
