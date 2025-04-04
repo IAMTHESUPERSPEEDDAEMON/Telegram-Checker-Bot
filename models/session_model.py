@@ -26,7 +26,6 @@ class SessionModel:
             return session_id
         except Exception as e:
             logging.error(f"Error adding session for phone {phone}: {e}")
-            raise
 
     def get_available_sessions(self, limit=10):
         """Получает доступные активные сессии с привязанными прокси"""

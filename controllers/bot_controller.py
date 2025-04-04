@@ -31,9 +31,9 @@ class BotController:
         # Команды
         self.app.add_handler(CommandHandler("start", self.start_command))
         self.app.add_handler(CommandHandler("help", self.help_command))
-        self.app.add_handler(CommandHandler("status", self.status_command))
 
         # Админские команды
+        self.app.add_handler(CommandHandler("status", self.status_command))
         self.app.add_handler(CommandHandler("add_session", self.add_session_command))
         self.app.add_handler(CommandHandler("add_proxy", self.add_proxy_command))
         self.app.add_handler(CommandHandler("check_sessions", self.check_sessions_command))
@@ -182,6 +182,56 @@ class BotController:
                 context,
                 f"Ошибка при проверке прокси: {str(e)}"
             )
+
+    async def update_proxy_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Обновляет данные прокси."""
+        if update.effective_user.id not in ADMIN_IDS:
+            await self.view.send_access_denied(update, context)
+            return
+
+        if not context.args or len(context.args) < 2:
+            await self.view.send_message(
+                update, context,
+                "Использование: /update_proxy <proxy_id> <новые параметры (тип, хост, порт, имя, пароль)>"
+            )
+            return
+
+        proxy_id = int(context.args[0])
+        new_params = context.args[1:]
+
+        try:
+            success = self.proxy_controller.update_proxy(proxy_id, new_params)
+            if success:
+                await self.view.send_message(update, context, f"Прокси {proxy_id} успешно обновлен!")
+            else:
+                await self.view.send_message(update, context, f"Не удалось обновить прокси {proxy_id}.")
+        except Exception as e:
+            await self.view.send_message(update, context, f"Ошибка при обновлении прокси: {str(e)}")
+
+    async def update_session_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Обновляет данные сессии."""
+        if update.effective_user.id not in ADMIN_IDS:
+            await self.view.send_access_denied(update, context)
+            return
+
+        if not context.args or len(context.args) < 2:
+            await self.view.send_message(
+                update, context,
+                "Использование: /update_session <session_id> <новые параметры (api_id, api_hash, proxy_id)>"
+            )
+            return
+
+        session_id = int(context.args[0])
+        new_params = context.args[1:]
+
+        try:
+            success = self.session_controller.update_session(session_id, new_params)
+            if success:
+                await self.view.send_message(update, context, f"Сессия {session_id} успешно обновлена!")
+            else:
+                await self.view.send_message(update, context, f"Не удалось обновить сессию {session_id}.")
+        except Exception as e:
+            await self.view.send_message(update, context, f"Ошибка при обновлении сессии: {str(e)}")
 
     async def process_csv(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обрабатывает полученный CSV файл"""
