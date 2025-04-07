@@ -73,14 +73,8 @@ class SessionController:
 
         # Форматируем прокси для Telethon
         proxy = None
-        if 'proxy_type' in session and session['proxy_type']:
-            proxy = self.proxy_model.format_proxy_for_telethon({
-                'type': session['proxy_type'],
-                'host': session['host'],
-                'port': session['port'],
-                'username': session['proxy_username'],
-                'password': session['proxy_password']
-            })
+        if 'proxy_id' in session and session['proxy_id']:
+            proxy = self.proxy_model.format_proxy_for_telethon(self.proxy_model.get_proxy_by_id(session['proxy_id']))
 
         try:
             # Создаем клиента
@@ -119,16 +113,9 @@ class SessionController:
 
     async def check_all_sessions(self):
         """Проверяет работоспособность всех сессий"""
-        # Получаем все сессии
-        query = """
-        SELECT s.*, p.type as proxy_type, p.host, p.port, p.username as proxy_username, 
-               p.password as proxy_password 
-        FROM telegram_sessions s
-        LEFT JOIN proxies p ON s.proxy_id = p.id
-        """
-
         try:
-            sessions = self.session_model.db.execute_query(query)
+            # получаем все сессии
+            sessions = self.session_model.get_all_sessions()
 
             # Создаем задачи для проверки каждой сессии
             tasks = [self.check_session(session) for session in sessions]
@@ -171,7 +158,7 @@ class SessionController:
                 return 0
 
             # Получаем доступные прокси
-            available_proxies = self.proxy_model.get_all_proxies()
+            available_proxies = self.proxy_model.get_available_proxies()
 
             if not available_proxies:
                 logging.warning("Нет доступных прокси для назначения.")
@@ -180,7 +167,7 @@ class SessionController:
             assigned_count = 0
             for i, session in enumerate(sessions_without_proxy):
                 proxy = available_proxies[i % len(available_proxies)]  # Назначаем прокси по кругу
-                self.session_model.update_session_proxy(session['id'], proxy['id'])
+                self.session_model.assign_proxy_to_session(session['id'], proxy['id'])
                 assigned_count += 1
 
             logging.info(f"Назначено прокси для {assigned_count} сессий.")
@@ -190,38 +177,3 @@ class SessionController:
             logging.error(f"Ошибка при назначении прокси: {e}")
             raise
 
-    def update_session(self, session_id: int, new_params: list) -> bool:
-        """Обновляет параметры существующей сессии."""
-        try:
-            session = self.session_model.get_session_by_id(session_id)
-            if not session:
-                logging.warning(f"Сессия {session_id} не найдена.")
-                return False
-
-            # Обновляем данные сессии
-            updated = self.session_model.update_session_from_list(session_id, new_params)
-            if updated:
-                logging.info(f"Сессия {session_id} успешно обновлена.")
-                return True
-            else:
-                logging.warning(f"Не удалось обновить сессию {session_id}.")
-                return False
-
-        except Exception as e:
-            logging.error(f"Ошибка при обновлении сессии {session_id}: {e}")
-            return False
-
-    def remove_session(self, session_id: int) -> bool:
-        """Удаляет сессию из базы данных."""
-        try:
-            removed = self.session_model.delete_session(session_id)
-            if removed:
-                logging.info(f"Сессия {session_id} успешно удалена.")
-                return True
-            else:
-                logging.warning(f"Сессия {session_id} не найдена или не удалена.")
-                return False
-
-        except Exception as e:
-            logging.error(f"Ошибка при удалении сессии {session_id}: {e}")
-            return False

@@ -38,8 +38,10 @@ class BotController:
         self.app.add_handler(CommandHandler("add_proxy", self.add_proxy_command))
         self.app.add_handler(CommandHandler("check_sessions", self.check_sessions_command))
         self.app.add_handler(CommandHandler("check_proxies", self.check_proxies_command))
-        self.app.add_handler(CommandHandler("update_proxy", self.update_proxy_command))   #to-do
-        self.app.add_handler(CommandHandler("update_session", self.update_session_command))    # to-do
+        self.app.add_handler(CommandHandler("update_proxy", self.update_proxy_command))
+        self.app.add_handler(CommandHandler("update_session", self.update_session_command))
+        self.app.add_handler(CommandHandler("delete_session", self.delete_session_command))
+        self.app.add_handler(CommandHandler("delete_proxy", self.delete_proxy_command))
 
         # Файлы
         self.app.add_handler(MessageHandler(filters.Document.CSV, self.process_csv))

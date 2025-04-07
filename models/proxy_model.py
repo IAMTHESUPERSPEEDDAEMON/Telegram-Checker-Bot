@@ -24,9 +24,9 @@ class ProxyModel:
 
         try:
             self.db.execute_query(query, params)
-            logging.info(f"Proxy {proxy_id} details updated")
+            logging.info(f"Proxy {proxy_id} данные обновлены")
         except Exception as e:
-            logging.error(f"Error updating proxy {proxy_id} details: {e}")
+            logging.error(f"Ошибка при обновлении прокси {proxy_id} детали: {e}")
             raise
 
     def delete_proxy(self, proxy_id):
@@ -41,7 +41,7 @@ class ProxyModel:
             self.db.execute_query(query, params)
             logging.info(f"Proxy {proxy_id} deleted")
         except Exception as e:
-            logging.error(f"Error deleting proxy {proxy_id}: {e}")
+            logging.error(f"Ошибка при удалении прокси {proxy_id}: {e}")
             raise
 
     def add_proxy(self, proxy_type, host, port, username, password):
@@ -58,24 +58,50 @@ class ProxyModel:
             logging.info(f"Added new {proxy_type} proxy {host}:{port}")
             return proxy_id
         except Exception as e:
-            logging.error(f"Error adding proxy {host}:{port}: {e}")
+            logging.error(f"Ошибка добавления прокси {host}:{port}: {e}")
+            return None
+
+    def get_proxy_by_id(self, proxy_id):
+        """Получает прокси по его id"""
+        query = """
+        SELECT * FROM proxies
+        WHERE id = %s
+        """
+        params = (proxy_id,)
+        try:
+            proxy = self.db.execute_query(query, params)
+            return proxy
+        except Exception as e:
+            logging.error(f"Прокси с id {proxy_id} не найден: {e}")
+            return None
+
+    def get_all_proxies(self):
+        """Получает все прокси"""
+        query = "SELECT * FROM proxies"
+        try:
+            proxies = self.db.execute_query(query)
+            return proxies
+        except Exception as e:
+            logging.error(f"Ошибка получения всех прокси: {e}")
             raise
 
     def get_available_proxies(self, limit=10):
-        """Получает доступные активные прокси"""
+        """Получает доступные активные прокси в указанном количестве"""
         query = """
-        SELECT * FROM proxies
-        WHERE is_active = TRUE
-        ORDER BY last_checked ASC
-        LIMIT %s
+        SELECT p.* FROM proxies p
+        LEFT JOIN telegram_sessions s ON p.id = s.proxy_id
+        WHERE s.id IS NULL AND p.is_active = TRUE
+        ORDER BY AGE(p.created_at) DESC LIMIT %s
         """
 
         try:
             proxies = self.db.execute_query(query, (limit,))
+            logging.info(f"Получено {len(proxies)} доступных прокси")
             return proxies
         except Exception as e:
-            logging.error(f"Error getting available proxies: {e}")
-            raise
+            logging.error(f"Ошибка получения доступных прокси: {e}")
+            return []
+
 
     def update_proxy_status(self, proxy_id, is_active):
         """Обновляет статус прокси"""
@@ -89,25 +115,45 @@ class ProxyModel:
         try:
             self.db.execute_query(query, params)
             status = "активен" if is_active else "неактивен"
-            logging.info(f"Proxy {proxy_id} status updated to {status}")
+            logging.info(f"Статус прокси {proxy_id} обновлен на {status}")
+            return True
         except Exception as e:
-            logging.error(f"Error updating proxy {proxy_id} status: {e}")
-            raise
+            logging.error(f"Ошибка обновления статуса прокси {proxy_id} status: {e}")
+            return False
 
-    def get_unused_proxies(self):
-        """Получает прокси, которые еще не привязаны к сессиям"""
-        query = """
-        SELECT p.* FROM proxies p
-        LEFT JOIN telegram_sessions s ON p.id = s.proxy_id
-        WHERE s.id IS NULL AND p.is_active = TRUE
-        """
+    async def check_proxy(self, proxy):
+        """Проверяет работоспособность прокси"""
+        proxy_dict = self.format_proxy_for_telethon(proxy)
+
+        if not proxy_dict:
+            logging.error(f"Неверный тип прокси: {proxy['type']}")
+            return False
 
         try:
-            proxies = self.db.execute_query(query)
-            return proxies
+            # Создаем временный клиент для проверки прокси
+            client = TelegramClient(
+                StringSession(),
+                api_id=123456,  # Фиктивные значения для проверки
+                api_hash='abcdef1234567890',
+                proxy=proxy_dict
+            )
+
+            # Пытаемся подключиться
+            await client.connect()
+            if client.is_connected():
+                is_connected = True
+                await client.disconnect()
+
+            if is_connected:
+                logging.info(f"Proxy {proxy['id']} ({proxy['host']}:{proxy['port']}) работает")
+                return True
+            else:
+                logging.warning(f"Proxy {proxy['id']} ({proxy['host']}:{proxy['port']}) ошибка подключения")
+                return False
+
         except Exception as e:
-            logging.error(f"Error getting unused proxies: {e}")
-            raise
+            logging.error(f"Ошибка проверки proxy {proxy['id']} ({proxy['host']}:{proxy['port']}): {e}")
+            return False
 
     def format_proxy_for_telethon(self, proxy):
         """Форматирует прокси для использования в Telethon"""
@@ -115,7 +161,7 @@ class ProxyModel:
 
         if proxy['type'] == 'http':
             proxy_dict = {
-                'proxy_type': 'http',
+                'proxy_type': proxy['type'],
                 'addr': proxy['host'],
                 'port': proxy['port'],
                 'username': proxy['username'],
@@ -132,51 +178,3 @@ class ProxyModel:
             }
 
         return proxy_dict
-
-    async def check_proxy(self, proxy):
-        """Проверяет работоспособность прокси"""
-        proxy_dict = self.format_proxy_for_telethon(proxy)
-
-        if not proxy_dict:
-            logging.error(f"Invalid proxy type: {proxy['type']}")
-            return False
-
-        try:
-            # Создаем временный клиент для проверки прокси
-            client = TelegramClient(
-                StringSession(),
-                api_id=123456,  # Фиктивные значения для проверки
-                api_hash='abcdef1234567890',
-                proxy=proxy_dict
-            )
-
-            # Пытаемся подключиться
-            await client.connect()
-            is_connected = await client.is_connected()
-            await client.disconnect()
-
-            if is_connected:
-                logging.info(f"Proxy {proxy['id']} ({proxy['host']}:{proxy['port']}) is working")
-                return True
-            else:
-                logging.warning(f"Proxy {proxy['id']} ({proxy['host']}:{proxy['port']}) connection failed")
-                return False
-
-        except Exception as e:
-            logging.error(f"Error checking proxy {proxy['id']} ({proxy['host']}:{proxy['port']}): {e}")
-            return False
-
-    async def check_all_proxies(self):
-        """Проверяет все прокси в базе данных"""
-        query = "SELECT * FROM proxies"
-
-        try:
-            proxies = self.db.execute_query(query)
-            for proxy in proxies:
-                is_working = await self.check_proxy(proxy)
-                self.update_proxy_status(proxy['id'], is_working)
-
-            logging.info("Completed checking all proxies")
-        except Exception as e:
-            logging.error(f"Error checking all proxies: {e}")
-            raise

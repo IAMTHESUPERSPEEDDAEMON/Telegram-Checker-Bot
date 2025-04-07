@@ -27,74 +27,40 @@ class ProxyController:
 
     def add_proxy(self, proxy_type, host, port, username=None, password=None):
         """Добавляет новый прокси в базу данных"""
-        try:
-            proxy_id = self.proxy_model.add_proxy(proxy_type, host, port, username, password)
-            logging.info(f"Прокси {host}:{port} успешно добавлен с ID: {proxy_id}")
+        proxy_id = self.proxy_model.add_proxy(proxy_type, host, port, username, password)
+        if proxy_id is not None:
             return {'status': 'success', 'message': f'Прокси {host}:{port} успешно добавлен.', 'proxy_id': proxy_id}
-        except Exception as e:
-            logging.error(f"Ошибка при добавлении прокси {host}:{port}: {e}")
-            return {'status': 'error', 'message': str(e)}
+        else:
+            return {'status': 'error', 'message': f'Прокси {host}:{port} не удалось добавить.'}
 
-    def get_available_proxies(self, limit=10):
-        """Получает доступные активные прокси"""
-        try:
-            proxies = self.proxy_model.get_available_proxies(limit)
-            logging.info(f"Получено {len(proxies)} доступных прокси")
-            return {'status': 'success', 'proxies': proxies}
-        except Exception as e:
-            logging.error(f"Ошибка при получении доступных прокси: {e}")
-            return {'status': 'error', 'message': str(e)}
-
-    def update_proxy_status(self, proxy_id, is_active):
-        """Обновляет статус прокси"""
-        try:
-            self.proxy_model.update_proxy_status(proxy_id, is_active)
-            status = "активен" if is_active else "неактивен"
-            logging.info(f"Статус прокси {proxy_id} обновлен на {status}")
-            return {'status': 'success', 'message': f'Статус прокси {proxy_id} обновлен на {status}'}
-        except Exception as e:
-            logging.error(f"Ошибка при обновлении статуса прокси {proxy_id}: {e}")
-            return {'status': 'error', 'message': str(e)}
-
-    def get_unused_proxies(self):
-        """Получает прокси, которые еще не привязаны к сессиям"""
-        try:
-            proxies = self.proxy_model.get_unused_proxies()
-            logging.info(f"Получено {len(proxies)} непривязанных прокси")
-            return {'status': 'success', 'proxies': proxies}
-        except Exception as e:
-            logging.error(f"Ошибка при получении непривязанных прокси: {e}")
-            return {'status': 'error', 'message': str(e)}
-
-    async def check_proxy(self, proxy_id):
-        """Проверяет работоспособность конкретного прокси"""
-        try:
-            # Получаем данные прокси по ID
-            query = "SELECT * FROM proxies WHERE id = %s"
-            proxy = self.proxy_model.db.execute_query(query, (proxy_id,))
-            if not proxy:
-                logging.error(f"Прокси с ID {proxy_id} не найден")
-                return {'status': 'error', 'message': f'Прокси с ID {proxy_id} не найден'}
-
-            # Проверяем прокси
-            is_working = await self.proxy_model.check_proxy(proxy[0])
-            if is_working:
-                logging.info(f"Прокси {proxy_id} работает корректно")
-                return {'status': 'success', 'message': f'Прокси {proxy_id} работает корректно'}
+    def delete_proxy(self, proxy_id):
+        """Удаляет прокси из базы данных"""
+        if self.proxy_model.get_proxy_by_id(proxy_id) is not None:
+            result = self.proxy_model.delete_proxy(proxy_id)
+            if result:
+                return {'status': 'success', 'message': f'Прокси с ID {proxy_id} успешно удален.'}
             else:
-                logging.warning(f"Прокси {proxy_id} не работает")
-                return {'status': 'error', 'message': f'Прокси {proxy_id} не работает'}
+                return {'status': 'error', 'message': f'Прокси с ID {proxy_id} не удалось удалить.'}
+        else:
+            return {'status': 'error', 'message': f'Прокси с ID {proxy_id} не существует.'}
 
-        except Exception as e:
-            logging.error(f"Ошибка при проверке прокси {proxy_id}: {e}")
-            return {'status': 'error', 'message': str(e)}
+    def update_proxy(self, proxy_id, new_host=None, new_port=None, new_username=None, new_password=None):
+        """Обновляет данные прокси в базе данных"""
+        result = self.proxy_model.update_proxy(proxy_id, new_host, new_port, new_username, new_password)
+        if result:
+            return {'status': 'success', 'message': f'Прокси с ID {proxy_id} успешно обновлен.'}
+        else:
+            return {'status': 'error', 'message': f'Прокси с ID {proxy_id} не удалось обновить.'}
 
     async def check_all_proxies(self):
         """Проверяет все прокси в базе данных"""
+        proxies = await self.proxy_model.get_all_proxies()
+
         try:
-            await self.proxy_model.check_all_proxies()
-            logging.info("Все прокси проверены")
-            return {'status': 'success', 'message': 'Все прокси проверены'}
+            for proxy in proxies:
+                is_working = await self.proxy_model.check_proxy(proxy)
+                self.proxy_model.update_proxy_status(proxy['id'], is_working)
+                return {'status': 'success', 'message': f'Проверка проксей завершена'}
         except Exception as e:
             logging.error(f"Ошибка при проверке всех прокси: {e}")
-            return {'status': 'error', 'message': str(e)}
+            return {'status': 'error', 'message': "Произошла ошибка при проверке всех проксей"}
