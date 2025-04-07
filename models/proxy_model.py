@@ -9,6 +9,41 @@ class ProxyModel:
     def __init__(self):
         self.db = DatabaseManager()
 
+    def update_proxy(self, proxy_id, proxy_type=None, host=None, port=None, username=None, password=None):
+        """Обновляет детали прокси"""
+        query = """
+        UPDATE proxies
+        SET type = COALESCE(%s, type),
+            host = COALESCE(%s, host),
+            port = COALESCE(%s, port),
+            username = COALESCE(%s, username),
+            password = COALESCE(%s, password)
+        WHERE id = %s
+        """
+        params = (proxy_type, host, port, username, password, proxy_id)
+
+        try:
+            self.db.execute_query(query, params)
+            logging.info(f"Proxy {proxy_id} details updated")
+        except Exception as e:
+            logging.error(f"Error updating proxy {proxy_id} details: {e}")
+            raise
+
+    def delete_proxy(self, proxy_id):
+        """Удаляет прокси из базы данных"""
+        query = """
+        DELETE FROM proxies
+        WHERE id = %s
+        """
+        params = (proxy_id,)
+
+        try:
+            self.db.execute_query(query, params)
+            logging.info(f"Proxy {proxy_id} deleted")
+        except Exception as e:
+            logging.error(f"Error deleting proxy {proxy_id}: {e}")
+            raise
+
     def add_proxy(self, proxy_type, host, port, username, password):
         """Добавляет новый прокси в базу данных"""
         query = """
