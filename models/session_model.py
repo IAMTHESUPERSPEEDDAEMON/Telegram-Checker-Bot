@@ -8,6 +8,23 @@ class SessionModel:
     def __init__(self):
         self.db = DatabaseManager()
 
+    def delete_session(self, session_id):
+        """Удаляет сессию из бд"""
+        query = """
+                DELETE FROM telegram_sessions
+                WHERE id = %s
+                """
+        params = (session_id,)
+
+        try:
+            self.db.execute_query(query, params)
+            logging.info(f"Session {session_id} deleted")
+        except Exception as e:
+            logging.error(f"Error deleting session {session_id}: {e}")
+            raise
+
+    def update_session(self, phone, api_id, api_hash, proxy_id=None):
+
     def add_session(self, phone, api_id, api_hash, proxy_id=None):
         """Добавляет новую сессию в базу данных"""
         session_file = f"session_{phone}"

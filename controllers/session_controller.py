@@ -10,6 +10,26 @@ class SessionController:
         self.session_model = SessionModel()
         self.proxy_model = ProxyModel()
 
+    def delete_session(self, session_id):
+        """Удаляет сессию из базы данных"""
+        try:
+            self.session_model.delete_session(session_id)
+            logging.info(f"Сессия {session_id} успешно удалена.")
+            return True
+        except Exception as e:
+            logging.error(f"Ошибка при удалении сессии {session_id}: {e}")
+            return False
+
+    def update_session(self, session_id, phone=None, api_id=None, api_hash=None, proxy_id=None):
+        """Обновляет детали сессии"""
+        try:
+            self.session_model.update_session(session_id, phone, api_id, api_hash, proxy_id)
+            logging.info(f"Сессия {session_id} успешно обновлена.")
+            return True
+        except Exception as e:
+            logging.error(f"Ошибка при обновлении сессии {session_id}: {e}")
+            return False
+
     def add_session(self, phone, api_id, api_hash, proxy_id=None):
         """Добавляет новую сессию в базу данных"""
         try:
