@@ -74,7 +74,7 @@ class DatabaseManager:
                 username VARCHAR(255),
                 has_telegram BOOLEAN DEFAULT TRUE,
                 user_id INT NOT NULL,
-                checked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                checked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
             """,
             """

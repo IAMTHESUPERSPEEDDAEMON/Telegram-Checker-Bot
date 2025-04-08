@@ -10,36 +10,7 @@ class SessionController:
         self.session_model = SessionModel()
         self.proxy_model = ProxyModel()
 
-    def delete_session(self, session_id):
-        """Удаляет сессию из базы данных"""
-        try:
-            self.session_model.delete_session(session_id)
-            logging.info(f"Сессия {session_id} успешно удалена.")
-            return True
-        except Exception as e:
-            logging.error(f"Ошибка при удалении сессии {session_id}: {e}")
-            return False
-
-    def update_session(self, session_id, phone=None, api_id=None, api_hash=None, proxy_id=None):
-        """Обновляет детали сессии"""
-        try:
-            self.session_model.update_session(session_id, phone, api_id, api_hash, proxy_id)
-            logging.info(f"Сессия {session_id} успешно обновлена.")
-            return True
-        except Exception as e:
-            logging.error(f"Ошибка при обновлении сессии {session_id}: {e}")
-            return False
-
-    def add_session(self, phone, api_id, api_hash, proxy_id=None):
-        """Добавляет новую сессию в базу данных"""
-        try:
-            session_id = self.session_model.add_session(phone, api_id, api_hash, proxy_id)
-            logging.info(f"Добавлена новая сессия для номера {phone}")
-            return session_id
-        except Exception as e:
-            logging.error(f"Ошибка при добавлении сессии для номера {phone}: {e}")
-
-    def get_sessions_stats(self):
+    async def get_sessions_stats(self):
         """Получает статистику по сессиям"""
         try:
             query = """
@@ -50,7 +21,6 @@ class SessionController:
             FROM telegram_sessions
             """
             result = self.session_model.db.execute_query(query)[0]
-
             return {
                 'total': result['total'],
                 'active': result['active'],
@@ -62,14 +32,47 @@ class SessionController:
             logging.error(f"Ошибка при получении статистики по сессиям: {e}")
             raise
 
-    async def check_session(self, session):
+    def delete_session(self, session_id):
+        """Удаляет сессию из базы данных"""
+        find_session = self.session_model.get_session_by_id(session_id)
+        if find_session:
+            deleted_session = self.session_model.delete_session(session_id)
+            if deleted_session:
+                return {'status': 'success', 'message': f'Сессия {session_id} успешно удалена.'}
+            else:
+                return {'status': 'error', 'message': f'Сессия {session_id} не найдена в базе данных.'}
+        else:
+            return {'status': 'error', 'message': f'Сессия {session_id} не найдена в базе данных.'}
+
+    def update_session(self, session_id, phone=None, api_id=None, api_hash=None, proxy_id=None):
+        """Обновляет детали сессии"""
+        updated_session = self.session_model.update_session(session_id, phone, api_id, api_hash, proxy_id)
+        if updated_session:
+            return {'status': 'success', 'message': f'Сессия {phone} успешно обновлена.'}
+        else:
+            return {'status': 'error', 'message': f'Ошибка при обновлении сессии {phone}.'}
+
+    def add_session(self, phone, api_id, api_hash, proxy_id=None):
+        """Добавляет новую сессию в базу данных"""
+        session_id = self.session_model.add_session(phone, api_id, api_hash, proxy_id)
+        if session_id:
+            return {'status': 'success', 'message': f'Сессия {phone} успешно добавлена.'}
+        else:
+            return {'status': 'error', 'message': f'Ошибка при добавлении сессии {phone}.'}
+
+    async def check_session(self, session_phone):
         """Проверяет работоспособность одной сессии"""
-        result = {
-            'id': session['id'],
-            'phone': session['phone'],
-            'is_working': False,
-            'error': None
-        }
+        # получаем сессию по номеру
+        session = self.session_model.get_session_by_phone(session_phone)
+        if session:
+            result = {
+                'id': session['id'],
+                'phone': session['phone'],
+                'is_working': False,
+                'error': None
+            }
+        else:
+            return {'status': 'error', 'message': f'Сессия {session_phone} не найдена'}
 
         # Форматируем прокси для Telethon
         proxy = None
@@ -150,12 +153,10 @@ class SessionController:
         """Назначает прокси для сессий без прокси"""
         try:
             # Получаем сессии без прокси
-            query = "SELECT * FROM telegram_sessions WHERE proxy_id IS NULL"
-            sessions_without_proxy = self.session_model.db.execute_query(query)
+            sessions_without_proxy = self.session_model.get_available_sessions_without_proxy()
 
             if not sessions_without_proxy:
-                logging.info("Все сессии уже имеют прокси.")
-                return 0
+                return {'status': 'error', 'message': f'Все сессии уже имеют прокси'}
 
             # Получаем доступные прокси
             available_proxies = self.proxy_model.get_available_proxies()

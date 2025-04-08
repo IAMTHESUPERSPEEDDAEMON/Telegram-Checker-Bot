@@ -1,8 +1,9 @@
 import os
 from dotenv import load_dotenv
 
-# Загрузка переменных окружения из .env файла
-load_dotenv()
+# Загрузка переменных окружения из app_config.env файла
+dotenv_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'app_config.env')
+load_dotenv(dotenv_path)
 
 # Настройки базы данных
 DB_CONFIG = {

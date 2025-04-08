@@ -68,11 +68,11 @@ class BotController:
             return
 
         # Получаем статус сессий и прокси
-        sessions_status = self.session_controller.get_sessions_stats()
-        proxies_status = self.proxy_controller.get_proxies_stats()
+        sessions_stats = await self.session_controller.get_sessions_stats()
+        proxies_stats = await self.proxy_controller.get_proxies_stats()
 
         # Отправляем статус
-        await self.view.send_status_message(update, context, sessions_status, proxies_status)
+        await self.view.send_status_message(update, context, sessions_stats, proxies_stats)
 
     async def add_session_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обрабатывает команду /add_session - добавляет новую сессию"""
@@ -201,14 +201,8 @@ class BotController:
         proxy_id = int(context.args[0])
         new_params = context.args[1:]
 
-        try:
-            success = self.proxy_controller.update_proxy(proxy_id, new_params)
-            if success:
-                await self.view.send_message(update, context, f"Прокси {proxy_id} успешно обновлен!")
-            else:
-                await self.view.send_message(update, context, f"Не удалось обновить прокси {proxy_id}.")
-        except Exception as e:
-            await self.view.send_message(update, context, f"Ошибка при обновлении прокси: {str(e)}")
+        success = self.proxy_controller.update_proxy(proxy_id, new_params)
+        await self.view.send_message(update, context, success['message'])
 
     async def update_session_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обновляет данные сессии."""
@@ -226,14 +220,34 @@ class BotController:
         session_id = int(context.args[0])
         new_params = context.args[1:]
 
-        try:
-            success = self.session_controller.update_session(session_id, new_params)
-            if success:
-                await self.view.send_message(update, context, f"Сессия {session_id} успешно обновлена!")
-            else:
-                await self.view.send_message(update, context, f"Не удалось обновить сессию {session_id}.")
-        except Exception as e:
-            await self.view.send_message(update, context, f"Ошибка при обновлении сессии: {str(e)}")
+        success = self.session_controller.update_session(session_id, new_params)
+        await self.view.send_message(update, context, success['message'])
+
+    async def delete_session_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE, session_id: int):
+        """Удаляет сессию по указанному ID"""
+        if update.effective_user.id not in ADMIN_IDS:
+            await self.view.send_access_denied(update, context)
+            return
+
+        if not context.args or len(context.args) < 1:
+            await self.view.send_message(update, context, "Не указан ID сессии для удаления.")
+            return
+
+        result = self.session_controller.delete_session(session_id)
+        await self.view.send_message(update, context, result['message'])
+
+    async def delete_proxy_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE, proxy_id: int):
+        """Удаляет прокси по указанному ID"""
+        if update.effective_user.id not in ADMIN_IDS:
+            await self.view.send_access_denied(update, context)
+            return
+
+        if not context.args or len(context.args) < 1:
+            await self.view.send_message(update, context, "Не указан ID прокси для удаления.")
+            return
+
+        result = self.proxy_controller.delete_proxy(proxy_id)
+        await self.view.send_message(update, context, result['message'])
 
     async def process_csv(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обрабатывает полученный CSV файл"""

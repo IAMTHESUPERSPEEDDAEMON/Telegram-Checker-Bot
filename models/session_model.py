@@ -19,9 +19,10 @@ class SessionModel:
         try:
             self.db.execute_query(query, params)
             logging.info(f"Session {session_id} deleted")
+            return True
         except Exception as e:
             logging.error(f"Error deleting session {session_id}: {e}")
-            raise
+            return False
 
     def update_session(self, session_id, phone, api_id, api_hash, proxy_id=None):
         """Обновляет данные сессии в базе данных"""
@@ -37,7 +38,7 @@ class SessionModel:
             return True
         except Exception as e:
             logging.error(f"Error updating session {session_id}: {e}")
-            raise
+            return False
 
     def add_session(self, phone, api_id, api_hash, proxy_id=None):
         """Добавляет новую сессию в базу данных"""
@@ -60,54 +61,20 @@ class SessionModel:
         except Exception as e:
             logging.error(f"Error adding session for phone {phone}: {e}")
 
-    def get_available_sessions(self, limit=10):
-        """Получает доступные активные сессии с привязанными прокси"""
+    def get_session_by_id(self, session_id):
+        """Получает сессию по id"""
         query = """
-        SELECT s.phone, s.api_id, s.api_hash, s.session_file, s.proxy_id, p.type as proxy_type,
+        SELECT s.*, p.type as proxy_type,
                p.host, p.port, p.username as proxy_username, p.password as proxy_password
         FROM telegram_sessions s
         LEFT JOIN proxies p ON s.proxy_id = p.id
-        WHERE s.is_active = TRUE AND (p.is_active IS NULL OR p.is_active = TRUE)
-        ORDER BY s.last_used ASC
-        LIMIT %s
+        WHERE s.id = %s
         """
-
         try:
-            sessions = self.db.execute_query(query, (limit,))
-            return sessions
+            session_data = self.db.execute_query(query, (session_id,))
+            return session_data[0] if session_data else None
         except Exception as e:
-            logging.error(f"Error getting available sessions: {e}")
-            raise
-
-    def update_session_status(self, session_id, is_active):
-        """Обновляет статус сессии"""
-        query = """
-        UPDATE telegram_sessions
-        SET is_active = %s, last_used = CURRENT_TIMESTAMP
-        WHERE id = %s
-        """
-        params = (is_active, session_id)
-
-        try:
-            self.db.execute_query(query, params)
-            status = "активна" if is_active else "неактивна"
-            logging.info(f"Session {session_id} status updated to {status}")
-        except Exception as e:
-            logging.error(f"Error updating session {session_id} status: {e}")
-            raise
-
-    def update_last_used(self, session_id):
-        """Обновляет время последнего использования сессии"""
-        query = """
-        UPDATE telegram_sessions
-        SET last_used = CURRENT_TIMESTAMP
-        WHERE id = %s
-        """
-
-        try:
-            self.db.execute_query(query, (session_id,))
-        except Exception as e:
-            logging.error(f"Error updating last_used for session {session_id}: {e}")
+            logging.error(f"Ошибка получения сессии по id {session_id}: {e}")
             raise
 
     def get_session_by_phone(self, phone):
@@ -124,7 +91,76 @@ class SessionModel:
             sessions = self.db.execute_query(query, (phone,))
             return sessions[0] if sessions else None
         except Exception as e:
-            logging.error(f"Error getting session for phone {phone}: {e}")
+            logging.error(f"Ошибка получения сессии по номеру телефона {phone}: {e}")
+            raise
+
+    def get_available_sessions_with_proxy(self, limit=10):
+        """Получает доступные активные сессии с привязанными прокси"""
+        query = """
+        SELECT s.phone, s.api_id, s.api_hash, s.session_file, s.proxy_id, p.type as proxy_type,
+               p.host, p.port, p.username as proxy_username, p.password as proxy_password
+        FROM telegram_sessions s
+        LEFT JOIN proxies p ON s.proxy_id = p.id
+        WHERE s.is_active = TRUE AND (p.is_active IS NULL OR p.is_active = TRUE)
+        ORDER BY s.last_used ASC
+        LIMIT %s
+        """
+
+        try:
+            sessions = self.db.execute_query(query, (limit,))
+            logging.info(f"Получено {len(sessions)} сессий с привязанными прокси")
+            return sessions
+        except Exception as e:
+            logging.error(f"Ошибка при получении доступных сессий с привязанными прокси: {e}")
+            raise
+
+    def get_available_sessions_without_proxy(self, limit=10):
+        """Получает доступные активные сессии не привязанные к прокси"""
+        query = """
+        SELECT s.phone, s.api_id, s.api_hash, s.session_file
+        FROM telegram_sessions s
+        WHERE s.is_active = TRUE AND s.proxy_id IS NULL
+        ORDER BY s.last_used ASC
+        LIMIT %s
+        """
+        try:
+            sessions = self.db.execute_query(query, (limit,))
+            logging.info(f"Доступные сессии без прокси получены в кол-ве: {len(sessions)}")
+            return sessions
+        except Exception as e:
+            logging.error(f"Ошибка получения доступных активных сессий без прокси: {e}")
+            raise
+
+    def update_session_status(self, session_id, is_active):
+        """Обновляет статус сессии"""
+        query = """
+        UPDATE telegram_sessions
+        SET is_active = %s, last_used = CURRENT_TIMESTAMP
+        WHERE id = %s
+        """
+        params = (is_active, session_id)
+
+        try:
+            self.db.execute_query(query, params)
+            status = "активна" if is_active else "неактивна"
+            logging.info(f"Session {session_id} статус обновлён на {status}")
+        except Exception as e:
+            logging.error(f"Ошибка обновления статуса сессии {session_id} status: {e}")
+            raise
+
+    def update_last_used(self, session_id):
+        """Обновляет время последнего использования сессии"""
+        query = """
+        UPDATE telegram_sessions
+        SET last_used = CURRENT_TIMESTAMP
+        WHERE id = %s
+        """
+
+        try:
+            self.db.execute_query(query, (session_id,))
+            logging.info(f"Session {session_id} обновлена в таблице telegram_sessions")
+        except Exception as e:
+            logging.error(f"Ошибка обновления времени последнего использования сессии {session_id}: {e}")
             raise
 
     def assign_proxy_to_session(self, session_id, proxy_id):
@@ -138,9 +174,9 @@ class SessionModel:
 
         try:
             self.db.execute_query(query, params)
-            logging.info(f"Assigned proxy {proxy_id} to session {session_id}")
+            logging.info(f"Привязана прокси {proxy_id} к сессии {session_id}")
         except Exception as e:
-            logging.error(f"Error assigning proxy to session: {e}")
+            logging.error(f"Ошибка привязки прокси к сессии {session_id}: {e}")
             raise
 
     def get_all_sessions(self):
@@ -155,5 +191,5 @@ class SessionModel:
             result = self.db.execute_query(query)
             return result
         except Exception as e:
-            logging.error(f"Error getting all sessions: {e}")
+            logging.error(f"Ошибка получения сессий: {e}")
             raise

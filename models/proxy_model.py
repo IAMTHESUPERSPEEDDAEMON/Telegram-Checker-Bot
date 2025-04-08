@@ -39,7 +39,8 @@ class ProxyModel:
 
         try:
             self.db.execute_query(query, params)
-            logging.info(f"Proxy {proxy_id} deleted")
+            logging.info(f"Proxy {proxy_id} удалён")
+            return True
         except Exception as e:
             logging.error(f"Ошибка при удалении прокси {proxy_id}: {e}")
             raise
