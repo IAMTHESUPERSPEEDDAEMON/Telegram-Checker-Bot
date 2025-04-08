@@ -24,14 +24,34 @@ class SessionModel:
             logging.error(f"Error deleting session {session_id}: {e}")
             return False
 
-    def update_session(self, session_id, phone, api_id, api_hash, proxy_id=None):
+    def update_session(self, session_id, phone=None, api_id=None, api_hash=None, proxy_id=None):
         """Обновляет данные сессии в базе данных"""
-        query = """
-                UPDATE telegram_sessions 
-                SET phone = %s, api_id = %s, api_hash = %s, proxy_id = %s
-                WHERE id = %s
-                """
-        params = (phone, api_id, api_hash, proxy_id, session_id)
+        fields = []
+        params = []
+
+        if phone is not None:
+            fields.append("phone = %s")
+            params.append(phone)
+        if api_id is not None:
+            fields.append("api_id = %s")
+            params.append(api_id)
+        if api_hash is not None:
+            fields.append("api_hash = %s")
+            params.append(api_hash)
+        if proxy_id is not None:
+            fields.append("proxy_id = %s")
+            params.append(proxy_id)
+
+        if not fields:
+            logging.warning(f"No fields to update for session {session_id}")
+            return False  # або True, якщо ти хочеш просто проігнорувати
+
+        query = f"""
+                    UPDATE telegram_sessions 
+                    SET {', '.join(fields)}
+                    WHERE id = %s
+                    """
+        params.append(session_id)
         try:
             self.db.execute_query(query, params)
             logging.info(f"Session {session_id} updated")

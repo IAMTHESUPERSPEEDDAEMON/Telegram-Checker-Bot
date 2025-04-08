@@ -44,13 +44,17 @@ class SessionController:
         else:
             return {'status': 'error', 'message': f'Сессия {session_id} не найдена в базе данных.'}
 
-    def update_session(self, session_id, phone=None, api_id=None, api_hash=None, proxy_id=None):
+    def update_session(self, session_id, new_params):
         """Обновляет детали сессии"""
-        updated_session = self.session_model.update_session(session_id, phone, api_id, api_hash, proxy_id)
-        if updated_session:
-            return {'status': 'success', 'message': f'Сессия {phone} успешно обновлена.'}
+        is_exists = self.session_model.get_session_by_id(session_id)
+        if is_exists is None:
+            return {'status': 'error', 'message': f'Сессия {session_id} не была найдена'}
         else:
-            return {'status': 'error', 'message': f'Ошибка при обновлении сессии {phone}.'}
+            updated_session = self.session_model.update_session(session_id, None, new_params['api_id'], new_params['api_hash'], None)
+            if updated_session:
+                return {'status': 'success', 'message': f'Сессия {session_id} успешно обновлена.'}
+            else:
+                return {'status': 'error', 'message': f'Ошибка при обновлении сессии {session_id}.'}
 
     def add_session(self, phone, api_id, api_hash, proxy_id=None):
         """Добавляет новую сессию в базу данных"""
@@ -163,7 +167,7 @@ class SessionController:
 
             if not available_proxies:
                 logging.warning("Нет доступных прокси для назначения.")
-                return 0
+                return {'status': 'warning', 'message': f'Нет доступных прокси для назначения.'}
 
             assigned_count = 0
             for i, session in enumerate(sessions_without_proxy):
@@ -172,7 +176,7 @@ class SessionController:
                 assigned_count += 1
 
             logging.info(f"Назначено прокси для {assigned_count} сессий.")
-            return assigned_count
+            return {'status': 'success', 'message': f'ВСе свободные прокси привязаны, кол-во обработанных строк: {assigned_count}.'}
 
         except Exception as e:
             logging.error(f"Ошибка при назначении прокси: {e}")

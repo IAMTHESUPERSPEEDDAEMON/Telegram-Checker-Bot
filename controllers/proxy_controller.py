@@ -60,7 +60,7 @@ class ProxyController:
             for proxy in proxies:
                 is_working = await self.proxy_model.check_proxy(proxy)
                 self.proxy_model.update_proxy_status(proxy['id'], is_working)
-                return {'status': 'success', 'message': f'Проверка проксей завершена'}
+            return await self.proxy_model.get_all_proxies()
         except Exception as e:
             logging.error(f"Ошибка при проверке всех прокси: {e}")
             return {'status': 'error', 'message': "Произошла ошибка при проверке всех проксей"}

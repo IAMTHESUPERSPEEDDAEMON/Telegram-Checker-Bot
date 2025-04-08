@@ -1,3 +1,4 @@
+import json
 import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters, CallbackQueryHandler
@@ -42,6 +43,7 @@ class BotController:
         self.app.add_handler(CommandHandler("update_session", self.update_session_command))
         self.app.add_handler(CommandHandler("delete_session", self.delete_session_command))
         self.app.add_handler(CommandHandler("delete_proxy", self.delete_proxy_command))
+        self.app.add_handler(CommandHandler("assign_proxys_to_sessions", self.assign_proxys_to_sessions_command))
 
         # Файлы
         self.app.add_handler(MessageHandler(filters.Document.CSV, self.process_csv))
@@ -174,16 +176,13 @@ class BotController:
             return
 
         await self.view.send_message(update, context, "Начинаем проверку прокси...")
-
-        try:
-            results = await self.proxy_controller.check_all_proxies()
+        results = await self.proxy_controller.check_all_proxies()
+        if results['status'] == 'error':
+            await self.view.send_message(update, context, results['message'])
+            return
+        else:
             await self.view.send_proxies_check_results(update, context, results)
-        except Exception as e:
-            await self.view.send_message(
-                update,
-                context,
-                f"Ошибка при проверке прокси: {str(e)}"
-            )
+
 
     async def update_proxy_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обновляет данные прокси."""
@@ -213,17 +212,21 @@ class BotController:
         if not context.args or len(context.args) < 2:
             await self.view.send_message(
                 update, context,
-                "Использование: /update_session <session_id> <новые параметры (api_id, api_hash, proxy_id)>"
+                "Использование: /update_session <session_id> <новые параметры в формате JSON>"
             )
             return
 
         session_id = int(context.args[0])
-        new_params = context.args[1:]
+        try:
+            new_params = json.loads(context.args[1])
+        except ValueError:
+            await self.view.send_message(update, context, "Неверный формат параметров.")
+            return
 
         success = self.session_controller.update_session(session_id, new_params)
         await self.view.send_message(update, context, success['message'])
 
-    async def delete_session_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE, session_id: int):
+    async def delete_session_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Удаляет сессию по указанному ID"""
         if update.effective_user.id not in ADMIN_IDS:
             await self.view.send_access_denied(update, context)
@@ -233,10 +236,11 @@ class BotController:
             await self.view.send_message(update, context, "Не указан ID сессии для удаления.")
             return
 
+        session_id = int(context.args[0])
         result = self.session_controller.delete_session(session_id)
         await self.view.send_message(update, context, result['message'])
 
-    async def delete_proxy_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE, proxy_id: int):
+    async def delete_proxy_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Удаляет прокси по указанному ID"""
         if update.effective_user.id not in ADMIN_IDS:
             await self.view.send_access_denied(update, context)
@@ -246,6 +250,7 @@ class BotController:
             await self.view.send_message(update, context, "Не указан ID прокси для удаления.")
             return
 
+        proxy_id = int(context.args[0])
         result = self.proxy_controller.delete_proxy(proxy_id)
         await self.view.send_message(update, context, result['message'])
 
