@@ -16,7 +16,14 @@ class TelegramView:
 
     async def send_help_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Отправляет справочное сообщение"""
-        message = "Доступные команды:\n/start - Запуск бота\n/help - Справка\n/status - Статус прокси и сессий"
+        message = ("Доступные команды:\n"
+                   "/start - Запуск бота\n"
+                   "/help - Справка\n"
+                   "/status - Статус прокси и сессий\n"
+                   "/add_session - Добавить сессию\n"
+                   "/check_sessions - Проверить сессии\n"
+                   "/update_session - Обновить данные сессии\n"
+                   "/delete_session - Удалить сессию\n")
         await update.message.reply_text(message)
 
     async def send_access_denied(self, update: Update, context: ContextTypes.DEFAULT_TYPE):

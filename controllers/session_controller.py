@@ -59,7 +59,7 @@ class SessionController:
     def add_session(self, phone, api_id, api_hash, proxy_id=None):
         """Добавляет новую сессию в базу данных"""
         session_id = self.session_model.add_session(phone, api_id, api_hash, proxy_id)
-        if session_id:
+        if session_id is int:
             return {'status': 'success', 'message': f'Сессия {phone} успешно добавлена.'}
         else:
             return {'status': 'error', 'message': f'Ошибка при добавлении сессии {phone}.'}

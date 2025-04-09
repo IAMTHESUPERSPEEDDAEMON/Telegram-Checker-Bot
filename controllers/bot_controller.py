@@ -46,7 +46,7 @@ class BotController:
         self.app.add_handler(CommandHandler("assign_proxys_to_sessions", self.assign_proxys_to_sessions_command))
 
         # Файлы
-        self.app.add_handler(MessageHandler(filters.Document.CSV, self.process_csv))
+        self.app.add_handler(MessageHandler(filters.Document.FileExtension('csv'), self.process_csv))
 
         # Обработчик колбеков
         self.app.add_handler(CallbackQueryHandler(self.handle_callback))
@@ -57,6 +57,7 @@ class BotController:
     async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обрабатывает команду /start"""
         await self.view.send_welcome_message(update, context)
+        # to-do USER CONTROLLER
 
     async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обрабатывает команду /help"""
@@ -253,6 +254,16 @@ class BotController:
         proxy_id = int(context.args[0])
         result = self.proxy_controller.delete_proxy(proxy_id)
         await self.view.send_message(update, context, result['message'])
+
+    async def assign_proxys_to_sessions_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Присваивает прокси к сессиям"""
+        if update.effective_user.id not in ADMIN_IDS:
+            await self.view.send_access_denied(update, context)
+            return
+
+        result = self.session_controller.assign_proxies_to_sessions()
+        await self.view.send_message(update, context, result['message'])
+
 
     async def process_csv(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обрабатывает полученный CSV файл"""
