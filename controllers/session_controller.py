@@ -51,18 +51,20 @@ class SessionController:
             return {'status': 'error', 'message': f'Сессия {session_id} не была найдена'}
         else:
             updated_session = self.session_model.update_session(session_id, None, new_params['api_id'], new_params['api_hash'], None)
+
             if updated_session:
                 return {'status': 'success', 'message': f'Сессия {session_id} успешно обновлена.'}
             else:
                 return {'status': 'error', 'message': f'Ошибка при обновлении сессии {session_id}.'}
 
-    def add_session(self, phone, api_id, api_hash, proxy_id=None):
+    async def add_session(self, phone, api_id, api_hash):
         """Добавляет новую сессию в базу данных"""
-        session_id = self.session_model.add_session(phone, api_id, api_hash, proxy_id)
-        if session_id is int:
-            return {'status': 'success', 'message': f'Сессия {phone} успешно добавлена.'}
+        session_id = self.session_model.add_session(phone, api_id, api_hash, proxy=None)
+
+        if isinstance(session_id, int) and session_id is not None:
+            return {'status': 'success', 'message': f'Session {phone} added successfully.'}
         else:
-            return {'status': 'error', 'message': f'Ошибка при добавлении сессии {phone}.'}
+            return {'status': 'error', 'message': f'Error while adding session for phone {phone}.\n{session_id}'}
 
     async def check_session(self, session_phone):
         """Проверяет работоспособность одной сессии"""

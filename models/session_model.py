@@ -2,6 +2,8 @@ import os
 import logging
 from dao.database import DatabaseManager
 from config.config import SESSIONS_DIR
+from telethon import TelegramClient
+from telethon.sessions import StringSession
 
 
 class SessionModel:
@@ -60,26 +62,102 @@ class SessionModel:
             logging.error(f"Error updating session {session_id}: {e}")
             return False
 
-    def add_session(self, phone, api_id, api_hash, proxy_id=None):
-        """Добавляет новую сессию в базу данных"""
+    async def add_session(self, phone, api_id, api_hash, proxy=None):
+        """Добавляет новую сессию в базу данных и создаёт файл сессии Telegram"""
         session_file = f"session_{phone}"
         session_path = os.path.join(SESSIONS_DIR, session_file)
 
-        query = """
-        INSERT INTO telegram_sessions 
-        (phone, api_id, api_hash, session_file, proxy_id) 
-        VALUES (%s, %s, %s, %s, %s)
-        """
-        params = (phone, api_id, api_hash, session_path, proxy_id)
+        # Проверка и создание директории для сессий, если она не существует
+        if not os.path.exists(SESSIONS_DIR):
+            os.makedirs(SESSIONS_DIR)
+        # Проверяем существование файла сессии
+        if not os.path.exists(f"{SESSIONS_DIR}/{session_file}.session"):
+            logging.info(f"Сессия для {phone} не найдена. Создаем новую...")
+
 
         try:
+            # Создаем клиента с указанием system_version и device_model
+            client = TelegramClient(
+                session_path,
+                api_id,
+                api_hash,
+                proxy=proxy if proxy else None,
+                system_version="4.16.30-vxCUSTOM",
+                device_model="Desktop",
+                lang_code="en"
+            )
+
+            # Запускаем клиент для создания файла сессии
+            await client.connect()
+
+            # Проверяем авторизацию
+            if not await client.is_user_authorized():
+                logging.error(f"Необходима авторизация для аккаунта {phone}")
+                try:
+                    sent_code = await client.send_code_request(phone)
+
+                    # запрашиваем код
+                    code = input(f"Введите код для номера {phone}: ")
+
+                    try:
+                        await client.sign_in(phone, code, phone_code_hash=sent_code.phone_code_hash)
+                    except Exception as e:
+                        if "Two-steps verification is enabled" in str(e):
+                            password = input("Введите пароль двухфакторной аутентификации: ")
+                            await client.sign_in(password=password)
+                            # Используем сохраненный пароль 2FA или запрашиваем новый
+                            # password = account.get('twofa')
+                            # if not password:
+                            #     password = input("Введите пароль двухфакторной аутентификации: ")
+                            # await client.sign_in(password=password)
+                        else:
+                            raise e
+                except Exception as e:
+                    logging.error(f"Ошибка при авторизации: {e}")
+                    return None
+
+
+            # Создаем строковую сессию на основе данных текущей сессии
+            # Важно: нам нужно получить данные из файловой сессии
+            # и создать с ними StringSession
+
+            # Получаем данные текущей сессии
+            dc_id = client.session.dc_id
+            server_address = client.session.server_address
+            port = client.session.port
+            auth_key = client.session.auth_key
+
+            # Создаем StringSession и настраиваем её с теми же данными
+            string_session = StringSession()
+            string_session.set_dc(dc_id, server_address, port)
+            string_session._auth_key = auth_key  # Используем приватный атрибут, т.к. нет публичного метода
+
+            # Получаем строковое представление сессии
+            session_string = string_session.save()
+
+            # Закрываем клиент
+            await client.disconnect()
+
+            # Записываем информацию в базу данных
+            query = """
+            INSERT INTO telegram_sessions 
+            (phone, api_id, api_hash, session_file) 
+            VALUES (%s, %s, %s, %s)
+            """
+            params = (phone, api_id, api_hash, session_string)
+
             self.db.execute_query(query, params)
             logging.info(f"Added new session for phone {phone}")
+
             # Получение последнего вставленного id
-            last_inserted_id_query = "SELECT LAST_INSERT_ID()"
-            return self.db.execute_scalar(last_inserted_id_query)
+            last_inserted_id_query = f"SELECT id FROM telegram_sessions WHERE phone='{phone}'"
+            result = self.db.execute_scalar(last_inserted_id_query)
+            logging.log(f'id Добавленной сессии для телефона {phone}: {result}')
+            return result
+
         except Exception as e:
             logging.error(f"Error adding session for phone {phone}: {e}")
+            raise e
 
     def get_session_by_id(self, session_id):
         """Получает сессию по id"""

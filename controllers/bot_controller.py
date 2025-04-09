@@ -96,22 +96,14 @@ class BotController:
         phone = context.args[0]
         api_id = context.args[1]
         api_hash = context.args[2]
-        proxy_id = int(context.args[3]) if len(context.args) > 3 else None
 
         # Добавляем сессию
-        try:
-            session_id = self.session_controller.add_session(phone, api_id, api_hash, proxy_id)
-            await self.view.send_message(
-                update,
-                context,
-                f"Сессия успешно добавлена (ID: {session_id})"
-            )
-        except Exception as e:
-            await self.view.send_message(
-                update,
-                context,
-                f"Ошибка при добавлении сессии: {str(e)}"
-            )
+        session_id = await self.session_controller.add_session(phone, api_id, api_hash)
+        await self.view.send_message(
+            update,
+            context,
+            session_id
+        )
 
     async def add_proxy_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обрабатывает команду /add_proxy - добавляет новый прокси"""
