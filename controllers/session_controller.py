@@ -10,28 +10,6 @@ class SessionController:
         self.session_model = SessionModel()
         self.proxy_model = ProxyModel()
 
-    async def get_sessions_stats(self):
-        """Получает статистику по сессиям"""
-        try:
-            query = """
-            SELECT 
-                COUNT(*) as total,
-                SUM(CASE WHEN is_active = TRUE THEN 1 ELSE 0 END) as active,
-                SUM(CASE WHEN proxy_id IS NOT NULL THEN 1 ELSE 0 END) as with_proxy
-            FROM telegram_sessions
-            """
-            result = self.session_model.db.execute_query(query)[0]
-            return {
-                'total': result['total'],
-                'active': result['active'],
-                'inactive': result['total'] - result['active'],
-                'with_proxy': result['with_proxy'],
-                'without_proxy': result['total'] - result['with_proxy']
-            }
-        except Exception as e:
-            logging.error(f"Ошибка при получении статистики по сессиям: {e}")
-            raise
-
     def delete_session(self, session_id):
         """Удаляет сессию из базы данных"""
         find_session = self.session_model.get_session_by_id(session_id)
@@ -58,13 +36,18 @@ class SessionController:
                 return {'status': 'error', 'message': f'Ошибка при обновлении сессии {session_id}.'}
 
     async def add_session(self, phone, api_id, api_hash):
-        """Добавляет новую сессию в базу данных"""
-        session_id = self.session_model.add_session(phone, api_id, api_hash, proxy=None)
-
-        if isinstance(session_id, int) and session_id is not None:
-            return {'status': 'success', 'message': f'Session {phone} added successfully.'}
+        """Создаёт новую сессию и добавляет её в бд"""
+        duplicate_session = await self.session_model.get_session_by_phone(phone)
+        if duplicate_session is not None:
+            return {'status': 'error', 'message': f'Сессия для телефона {phone} уже существует.'}
         else:
-            return {'status': 'error', 'message': f'Error while adding session for phone {phone}.\n{session_id}'}
+            session_data = await self.session_model.create_session(phone, api_id, api_hash)
+            session_id = await self.session_model.add_session_to_db(session_data)
+
+            if isinstance(session_id, int) and session_id is not None:
+                return {'status': 'success', 'message': f'Session {phone} added successfully.'}
+            else:
+                return {'status': 'error', 'message': f'Error while adding session for phone {phone}.\n{session_id}'}
 
     async def check_session(self, session_phone):
         """Проверяет работоспособность одной сессии"""
@@ -155,7 +138,7 @@ class SessionController:
             logging.error(f"Ошибка при проверке сессий: {e}")
             raise
 
-    def assign_proxies_to_sessions(self):
+    async def assign_proxies_to_sessions(self):
         """Назначает прокси для сессий без прокси"""
         try:
             # Получаем сессии без прокси
@@ -184,3 +167,10 @@ class SessionController:
             logging.error(f"Ошибка при назначении прокси: {e}")
             raise
 
+    async def get_sessions_stats(self):
+        """Получаем статистику по сессиям"""
+        stats = await self.session_model.get_sessions_stats()
+        if stats is not None:
+            return {'status': 'success', 'message': stats}
+        else:
+            return {'status': 'warning', 'message': "Нет данных для статистики."}

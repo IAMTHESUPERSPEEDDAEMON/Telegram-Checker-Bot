@@ -1,11 +1,11 @@
 import os
-import logging
 from dao.database import DatabaseManager
 from config.config import SESSIONS_DIR
 from telethon import TelegramClient
 from telethon.sessions import StringSession
+from utils.logger import Logger
 
-
+logger = Logger()
 class SessionModel:
     def __init__(self):
         self.db = DatabaseManager()
@@ -20,13 +20,13 @@ class SessionModel:
 
         try:
             self.db.execute_query(query, params)
-            logging.info(f"Session {session_id} deleted")
+            logger.info(f"Session {session_id} deleted")
             return True
         except Exception as e:
-            logging.error(f"Error deleting session {session_id}: {e}")
+            logger.error(f"Error deleting session {session_id}: {e}")
             return False
 
-    def update_session(self, session_id, phone=None, api_id=None, api_hash=None, proxy_id=None):
+    async def update_session(self, session_id, phone=None, api_id=None, api_hash=None, proxy_id=None):
         """Обновляет данные сессии в базе данных"""
         fields = []
         params = []
@@ -45,7 +45,7 @@ class SessionModel:
             params.append(proxy_id)
 
         if not fields:
-            logging.warning(f"No fields to update for session {session_id}")
+            logger.warning(f"No fields to update for session {session_id}")
             return False  # або True, якщо ти хочеш просто проігнорувати
 
         query = f"""
@@ -55,15 +55,38 @@ class SessionModel:
                     """
         params.append(session_id)
         try:
-            self.db.execute_query(query, params)
-            logging.info(f"Session {session_id} updated")
+            await self.db.execute_query(query, params)
+            logger.info(f"Session {session_id} updated")
             return True
         except Exception as e:
-            logging.error(f"Error updating session {session_id}: {e}")
+            logger.error(f"Error updating session {session_id}: {e}")
             return False
 
-    async def add_session(self, phone, api_id, api_hash, proxy=None):
-        """Добавляет новую сессию в базу данных и создаёт файл сессии Telegram"""
+    async def add_session_to_db(self, session_data_list):
+        """Добавляет новую сессию в базу данных"""
+        print(session_data_list)
+        phone = session_data_list[0]
+        api_id = session_data_list[1]
+        api_hash = session_data_list[2]
+        string_session = session_data_list[3]
+            # Записываем информацию в базу данных
+        query = """
+        INSERT INTO telegram_sessions 
+        (phone, api_id, api_hash, session_file) 
+        VALUES (%s, %s, %s, %s)
+        """
+        params = (phone, api_id, api_hash, string_session)
+
+        self.db.execute_query(query, params)
+
+        # Получение последнего вставленного id
+        last_inserted_id_query = f"SELECT id FROM telegram_sessions WHERE phone='{phone}'"
+        result = self.db.execute_query(last_inserted_id_query)
+        logger.info(f'Успех! id Добавленной сессии для телефона {phone}: {result}')
+        return result
+
+    @staticmethod
+    async def create_session(phone, api_id, api_hash, proxy=None):
         session_file = f"session_{phone}"
         session_path = os.path.join(SESSIONS_DIR, session_file)
 
@@ -72,8 +95,7 @@ class SessionModel:
             os.makedirs(SESSIONS_DIR)
         # Проверяем существование файла сессии
         if not os.path.exists(f"{SESSIONS_DIR}/{session_file}.session"):
-            logging.info(f"Сессия для {phone} не найдена. Создаем новую...")
-
+            logger.info(f"Сессия для {phone} не найдена. Создаем новую...")
 
         try:
             # Создаем клиента с указанием system_version и device_model
@@ -92,7 +114,7 @@ class SessionModel:
 
             # Проверяем авторизацию
             if not await client.is_user_authorized():
-                logging.error(f"Необходима авторизация для аккаунта {phone}")
+                logger.error(f"Необходима авторизация для аккаунта {phone}")
                 try:
                     sent_code = await client.send_code_request(phone)
 
@@ -105,61 +127,24 @@ class SessionModel:
                         if "Two-steps verification is enabled" in str(e):
                             password = input("Введите пароль двухфакторной аутентификации: ")
                             await client.sign_in(password=password)
-                            # Используем сохраненный пароль 2FA или запрашиваем новый
-                            # password = account.get('twofa')
-                            # if not password:
-                            #     password = input("Введите пароль двухфакторной аутентификации: ")
-                            # await client.sign_in(password=password)
                         else:
                             raise e
                 except Exception as e:
-                    logging.error(f"Ошибка при авторизации: {e}")
+                    logger.error(f"Ошибка при авторизации: {e}")
                     return None
 
-
-            # Создаем строковую сессию на основе данных текущей сессии
-            # Важно: нам нужно получить данные из файловой сессии
-            # и создать с ними StringSession
-
-            # Получаем данные текущей сессии
-            dc_id = client.session.dc_id
-            server_address = client.session.server_address
-            port = client.session.port
-            auth_key = client.session.auth_key
-
-            # Создаем StringSession и настраиваем её с теми же данными
-            string_session = StringSession()
-            string_session.set_dc(dc_id, server_address, port)
-            string_session._auth_key = auth_key  # Используем приватный атрибут, т.к. нет публичного метода
-
             # Получаем строковое представление сессии
-            session_string = string_session.save()
+            string_session = StringSession.save(client.session)
 
             # Закрываем клиент
             await client.disconnect()
-
-            # Записываем информацию в базу данных
-            query = """
-            INSERT INTO telegram_sessions 
-            (phone, api_id, api_hash, session_file) 
-            VALUES (%s, %s, %s, %s)
-            """
-            params = (phone, api_id, api_hash, session_string)
-
-            self.db.execute_query(query, params)
-            logging.info(f"Added new session for phone {phone}")
-
-            # Получение последнего вставленного id
-            last_inserted_id_query = f"SELECT id FROM telegram_sessions WHERE phone='{phone}'"
-            result = self.db.execute_scalar(last_inserted_id_query)
-            logging.log(f'id Добавленной сессии для телефона {phone}: {result}')
-            return result
-
+            return [phone, api_id, api_hash, string_session]
         except Exception as e:
-            logging.error(f"Error adding session for phone {phone}: {e}")
+            logger.error(f"Ошибка при авторизации: {e}")
             raise e
 
-    def get_session_by_id(self, session_id):
+
+    async def get_session_by_id(self, session_id):
         """Получает сессию по id"""
         query = """
         SELECT s.*, p.type as proxy_type,
@@ -169,13 +154,13 @@ class SessionModel:
         WHERE s.id = %s
         """
         try:
-            session_data = self.db.execute_query(query, (session_id,))
+            session_data = await self.db.execute_query(query, (session_id,))
             return session_data[0] if session_data else None
         except Exception as e:
-            logging.error(f"Ошибка получения сессии по id {session_id}: {e}")
+            logger.error(f"Ошибка получения сессии по id {session_id}: {e}")
             raise
 
-    def get_session_by_phone(self, phone):
+    async def get_session_by_phone(self, phone):
         """Получает сессию по номеру телефона"""
         query = """
         SELECT s.*, p.type as proxy_type,
@@ -189,7 +174,7 @@ class SessionModel:
             sessions = self.db.execute_query(query, (phone,))
             return sessions[0] if sessions else None
         except Exception as e:
-            logging.error(f"Ошибка получения сессии по номеру телефона {phone}: {e}")
+            logger.error(f"Ошибка получения сессии по номеру телефона {phone}: {e}")
             raise
 
     def get_available_sessions_with_proxy(self, limit=10):
@@ -206,10 +191,10 @@ class SessionModel:
 
         try:
             sessions = self.db.execute_query(query, (limit,))
-            logging.info(f"Получено {len(sessions)} сессий с привязанными прокси")
+            logger.info(f"Получено {len(sessions)} сессий с привязанными прокси")
             return sessions
         except Exception as e:
-            logging.error(f"Ошибка при получении доступных сессий с привязанными прокси: {e}")
+            logger.error(f"Ошибка при получении доступных сессий с привязанными прокси: {e}")
             raise
 
     def get_available_sessions_without_proxy(self, limit=10):
@@ -223,10 +208,10 @@ class SessionModel:
         """
         try:
             sessions = self.db.execute_query(query, (limit,))
-            logging.info(f"Доступные сессии без прокси получены в кол-ве: {len(sessions)}")
+            logger.info(f"Доступные сессии без прокси получены в кол-ве: {len(sessions)}")
             return sessions
         except Exception as e:
-            logging.error(f"Ошибка получения доступных активных сессий без прокси: {e}")
+            logger.error(f"Ошибка получения доступных активных сессий без прокси: {e}")
             raise
 
     def update_session_status(self, session_id, is_active):
@@ -241,9 +226,9 @@ class SessionModel:
         try:
             self.db.execute_query(query, params)
             status = "активна" if is_active else "неактивна"
-            logging.info(f"Session {session_id} статус обновлён на {status}")
+            logger.info(f"Session {session_id} статус обновлён на {status}")
         except Exception as e:
-            logging.error(f"Ошибка обновления статуса сессии {session_id} status: {e}")
+            logger.error(f"Ошибка обновления статуса сессии {session_id} status: {e}")
             raise
 
     def update_last_used(self, session_id):
@@ -256,9 +241,9 @@ class SessionModel:
 
         try:
             self.db.execute_query(query, (session_id,))
-            logging.info(f"Session {session_id} обновлена в таблице telegram_sessions")
+            logger.info(f"Session {session_id} обновлена в таблице telegram_sessions")
         except Exception as e:
-            logging.error(f"Ошибка обновления времени последнего использования сессии {session_id}: {e}")
+            logger.error(f"Ошибка обновления времени последнего использования сессии {session_id}: {e}")
             raise
 
     def assign_proxy_to_session(self, session_id, proxy_id):
@@ -272,9 +257,9 @@ class SessionModel:
 
         try:
             self.db.execute_query(query, params)
-            logging.info(f"Привязана прокси {proxy_id} к сессии {session_id}")
+            logger.info(f"Привязана прокси {proxy_id} к сессии {session_id}")
         except Exception as e:
-            logging.error(f"Ошибка привязки прокси к сессии {session_id}: {e}")
+            logger.error(f"Ошибка привязки прокси к сессии {session_id}: {e}")
             raise
 
     def get_all_sessions(self):
@@ -289,5 +274,27 @@ class SessionModel:
             result = self.db.execute_query(query)
             return result
         except Exception as e:
-            logging.error(f"Ошибка получения сессий: {e}")
+            logger.error(f"Ошибка получения сессий: {e}")
             raise
+
+    async def get_sessions_stats(self):
+        """Получает статистику по сессиям"""
+        try:
+            query = """
+            SELECT 
+                COUNT(*) as total,
+                SUM(CASE WHEN is_active = TRUE THEN 1 ELSE 0 END) as active,
+                SUM(CASE WHEN proxy_id IS NOT NULL THEN 1 ELSE 0 END) as with_proxy
+            FROM telegram_sessions
+            """
+            result = self.db.execute_query(query)[0]
+            return {
+                'total': int(result['total']),
+                'active': int(result['active']),
+                'inactive': int(result['total']) - int(result['active']),
+                'with_proxy': int(result['with_proxy']),
+                'without_proxy': int(result['total']) - int(result['with_proxy'])
+            }
+        except Exception as e:
+            logger.error(f"Ошибка при получении статистики по сессиям: {e}")
+            return None

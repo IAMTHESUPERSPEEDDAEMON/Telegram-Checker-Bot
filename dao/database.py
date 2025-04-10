@@ -44,7 +44,7 @@ class DatabaseManager:
                 phone VARCHAR(20) UNIQUE NOT NULL,
                 api_id VARCHAR(20) NOT NULL,
                 api_hash VARCHAR(100) NOT NULL,
-                session_file VARCHAR(255) NOT NULL,
+                session_file TEXT NOT NULL,
                 proxy_id INT NULL,
                 is_active BOOLEAN DEFAULT TRUE,
                 last_used TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

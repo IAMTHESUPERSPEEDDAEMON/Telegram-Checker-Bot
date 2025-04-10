@@ -178,7 +178,7 @@ class CheckerController:
             return []
 
         # Получаем доступные сессии (не более MAX_SESSIONS_PER_USER)
-        sessions = self.session_model.get_available_sessions(MAX_SESSIONS_PER_USER)
+        sessions = self.ses.get_available_sessions(MAX_SESSIONS_PER_USER)
         if not sessions:
             error_msg = "Нет доступных сессий для проверки"
             logging.error(error_msg)

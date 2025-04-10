@@ -1,15 +1,15 @@
 import json
-import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters, CallbackQueryHandler
 from controllers.checker_controller import CheckerController
 from controllers.session_controller import SessionController
 from controllers.proxy_controller import ProxyController
+from utils.logger import Logger
 from views.telegram_view import TelegramView
 from utils.csv_handler import CSVHandler
 from config.config import BOT_TOKEN, ADMIN_IDS, TEMP_DIR
 
-
+logger = Logger()
 class BotController:
     def __init__(self):
         self.checker = CheckerController()
@@ -19,7 +19,7 @@ class BotController:
         self.csv_handler = CSVHandler()
 
         # Добавляем обработчик ошибок
-        self.checker.add_error_handler(self.handle_error)
+        # self.checker.add_error_handler(self.handle_error)
 
         # Создаем приложение
         self.app = ApplicationBuilder().token(BOT_TOKEN).build()
@@ -49,10 +49,7 @@ class BotController:
         self.app.add_handler(MessageHandler(filters.Document.FileExtension('csv'), self.process_csv))
 
         # Обработчик колбеков
-        self.app.add_handler(CallbackQueryHandler(self.handle_callback))
-
-        # Обработчик ошибок
-        self.app.add_error_handler(self.error_handler)
+        # self.app.add_handler(CallbackQueryHandler(self.handle_callback))
 
     async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обрабатывает команду /start"""
@@ -75,7 +72,7 @@ class BotController:
         proxies_stats = await self.proxy_controller.get_proxies_stats()
 
         # Отправляем статус
-        await self.view.send_status_message(update, context, sessions_stats, proxies_stats)
+        await self.view.send_status_message(update, context, sessions_stats['message'], proxies_stats)
 
     async def add_session_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обрабатывает команду /add_session - добавляет новую сессию"""
@@ -98,12 +95,58 @@ class BotController:
         api_hash = context.args[2]
 
         # Добавляем сессию
-        session_id = await self.session_controller.add_session(phone, api_id, api_hash)
+        result = await self.session_controller.add_session(phone, api_id, api_hash)
         await self.view.send_message(
             update,
             context,
-            session_id
+            result
         )
+
+    async def check_sessions_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Обрабатывает команду /check_sessions - проверяет работоспособность сессий"""
+        # Проверяем, является ли пользователь администратором
+        if update.effective_user.id not in ADMIN_IDS:
+            await self.view.send_access_denied(update, context)
+            return
+
+        await self.view.send_message(update, context, "Начинаем проверку сессий...")
+
+        try:
+            results = await self.session_controller.check_all_sessions()
+            await self.view.send_sessions_check_results(update, context, results)
+        except Exception as e:
+            await self.view.send_message(
+                update,
+                context,
+                f"Ошибка при проверке сессий: {str(e)}"
+            )
+
+    async def update_session_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Обновляет данные сессии."""
+        if update.effective_user.id not in ADMIN_IDS:
+            await self.view.send_access_denied(update, context)
+            return
+
+        if not context.args or len(context.args) < 2:
+            await self.view.send_message(
+                update, context,
+                "Использование: /update_session <session_id> <новые параметры в формате JSON>"
+            )
+            return
+
+    async def delete_session_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Удаляет сессию по указанному ID"""
+        if update.effective_user.id not in ADMIN_IDS:
+            await self.view.send_access_denied(update, context)
+            return
+
+        if not context.args or len(context.args) < 1:
+            await self.view.send_message(update, context, "Не указан ID сессии для удаления.")
+            return
+
+        session_id = int(context.args[0])
+        result = self.session_controller.delete_session(session_id)
+        await self.view.send_message(update, context, result['message'])
 
     async def add_proxy_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обрабатывает команду /add_proxy - добавляет новый прокси"""
@@ -142,25 +185,6 @@ class BotController:
                 f"Ошибка при добавлении прокси: {str(e)}"
             )
 
-    async def check_sessions_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Обрабатывает команду /check_sessions - проверяет работоспособность сессий"""
-        # Проверяем, является ли пользователь администратором
-        if update.effective_user.id not in ADMIN_IDS:
-            await self.view.send_access_denied(update, context)
-            return
-
-        await self.view.send_message(update, context, "Начинаем проверку сессий...")
-
-        try:
-            results = await self.session_controller.check_all_sessions()
-            await self.view.send_sessions_check_results(update, context, results)
-        except Exception as e:
-            await self.view.send_message(
-                update,
-                context,
-                f"Ошибка при проверке сессий: {str(e)}"
-            )
-
     async def check_proxies_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обрабатывает команду /check_proxies - проверяет работоспособность прокси"""
         # Проверяем, является ли пользователь администратором
@@ -196,19 +220,6 @@ class BotController:
         success = self.proxy_controller.update_proxy(proxy_id, new_params)
         await self.view.send_message(update, context, success['message'])
 
-    async def update_session_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Обновляет данные сессии."""
-        if update.effective_user.id not in ADMIN_IDS:
-            await self.view.send_access_denied(update, context)
-            return
-
-        if not context.args or len(context.args) < 2:
-            await self.view.send_message(
-                update, context,
-                "Использование: /update_session <session_id> <новые параметры в формате JSON>"
-            )
-            return
-
         session_id = int(context.args[0])
         try:
             new_params = json.loads(context.args[1])
@@ -218,20 +229,6 @@ class BotController:
 
         success = self.session_controller.update_session(session_id, new_params)
         await self.view.send_message(update, context, success['message'])
-
-    async def delete_session_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Удаляет сессию по указанному ID"""
-        if update.effective_user.id not in ADMIN_IDS:
-            await self.view.send_access_denied(update, context)
-            return
-
-        if not context.args or len(context.args) < 1:
-            await self.view.send_message(update, context, "Не указан ID сессии для удаления.")
-            return
-
-        session_id = int(context.args[0])
-        result = self.session_controller.delete_session(session_id)
-        await self.view.send_message(update, context, result['message'])
 
     async def delete_proxy_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Удаляет прокси по указанному ID"""
@@ -308,53 +305,37 @@ class BotController:
                 )
 
         except Exception as e:
-            logging.error(f"Ошибка при обработке файла: {e}")
+            logger.error(f"Ошибка при обработке файла: {e}")
             await self.view.send_message(
                 update,
                 context,
                 f"Произошла ошибка при обработке файла: {str(e)}"
             )
 
-    async def handle_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Обрабатывает нажатия на инлайн-кнопки"""
-        query = update.callback_query
-        await query.answer()
-
-        # Обрабатываем данные колбека
-        callback_data = query.data
-
-        if callback_data.startswith("check_batch_"):
-            batch_id = int(callback_data.replace("check_batch_", ""))
-            # Отправляем статус проверки
-            await self.view.send_batch_status(update, context, batch_id)
-
-    async def handle_error(self, error_type, message, details=None):
-        """Обрабатывает ошибки от CheckerController"""
-        # Логируем ошибку
-        logging.error(f"Error {error_type}: {message} - {details}")
-
-        # Отправляем сообщение администраторам
-        for admin_id in ADMIN_IDS:
-            try:
-                error_text = f"🚨 Ошибка {error_type}: {message}"
-                if details:
-                    error_text += f"\nДетали: {details}"
-
-                await self.app.bot.send_message(chat_id=admin_id, text=error_text)
-            except Exception as e:
-                logging.error(f"Не удалось отправить уведомление об ошибке администратору {admin_id}: {e}")
-
-    async def error_handler(self, update: object, context: ContextTypes.DEFAULT_TYPE):
-        """Обрабатывает ошибки телеграм-бота"""
-        logging.error(f"Exception while handling an update: {context.error}")
-
-        # Отправляем сообщение об ошибке администраторам
-        for admin_id in ADMIN_IDS:
-            try:
-                error_text = f"🚨 Ошибка в боте: {context.error}"
-                await self.app.bot.send_message(chat_id=admin_id, text=error_text)
-            except Exception as e:
-                logging.error(f"Не удалось отправить уведомление об ошибке администратору {admin_id}: {e}")
+    # async def handle_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    #     """Обрабатывает нажатия на инлайн-кнопки"""
+    #     query = update.callback_query
+    #     await query.answer()
+    #
+    #     # Обрабатываем данные колбека
+    #     callback_data = query.data
+    #
+    #     if callback_data.startswith("check_batch_"):
+    #         batch_id = int(callback_data.replace("check_batch_", ""))
+    #         # Отправляем статус проверки
+    #         await self.view.send_batch_status(update, context, batch_id)
+    #
+    # async def error_handler(self, update: object, context: ContextTypes.DEFAULT_TYPE):
+    #     """Обрабатывает ошибки телеграм-бота"""
+    #     logger.error(f"Exception while handling an update: {context.error}")
+    #
+    #     # Отправляем сообщение об ошибке администраторам
+    #     for admin_id in ADMIN_IDS:
+    #         try:
+    #             error_text = f"🚨 Ошибка в боте: {context.error}"
+    #             await self.app.bot.send_message(chat_id=admin_id, text=error_text)
+    #         except Exception as e:
+    #             logger.error(f"Не удалось отправить уведомление об ошибке администратору {admin_id}: {e}")
 
     def run(self):
         """Запускает бота"""
