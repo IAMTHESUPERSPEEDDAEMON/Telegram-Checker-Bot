@@ -15,8 +15,6 @@ telegram_checker_bot/
 ├── views/
 │   └── telegram_view.py    # Отправка сообщений пользователям
 ├── utils/
-│   ├── csv_handler.py      # Обработка CSV файлов
 │   ├── logger.py           # Логирование
-│   └── exceptions.py       # Пользовательские исключения
 ├── main.py                 # Точка входа в приложение
 └── requirements.txt        # Зависимости проекта

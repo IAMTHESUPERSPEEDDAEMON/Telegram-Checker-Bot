@@ -10,7 +10,7 @@ class SessionModel:
     def __init__(self):
         self.db = DatabaseManager()
 
-    def delete_session(self, session_id):
+    async def delete_session(self, session_id):
         """Удаляет сессию из бд"""
         query = """
                 DELETE FROM telegram_sessions
@@ -19,7 +19,7 @@ class SessionModel:
         params = (session_id,)
 
         try:
-            self.db.execute_query(query, params)
+            await self.db.execute_query(query, params)
             logger.info(f"Session {session_id} deleted")
             return True
         except Exception as e:
@@ -64,7 +64,6 @@ class SessionModel:
 
     async def add_session_to_db(self, session_data_list):
         """Добавляет новую сессию в базу данных"""
-        print(session_data_list)
         phone = session_data_list[0]
         api_id = session_data_list[1]
         api_hash = session_data_list[2]
@@ -82,11 +81,11 @@ class SessionModel:
         # Получение последнего вставленного id
         last_inserted_id_query = f"SELECT id FROM telegram_sessions WHERE phone='{phone}'"
         result = self.db.execute_query(last_inserted_id_query)
-        logger.info(f'Успех! id Добавленной сессии для телефона {phone}: {result}')
-        return result
+        logger.info(f'Успех! id Добавленной сессии для телефона {phone}: {result[0]}')
+        return result[0]
 
     @staticmethod
-    async def create_session(phone, api_id, api_hash, proxy=None):
+    async def create_session(phone, api_id, api_hash, code_callback=None, password_callback=None, proxy=None):
         session_file = f"session_{phone}"
         session_path = os.path.join(SESSIONS_DIR, session_file)
 
@@ -119,7 +118,10 @@ class SessionModel:
                     sent_code = await client.send_code_request(phone)
 
                     # запрашиваем код
-                    code = input(f"Введите код для номера {phone}: ")
+                    if code_callback:
+                        code = await code_callback(phone, sent_code.phone_code_hash)
+                    else:
+                        code = input(f"Введите код для номера {phone}: ")
 
                     try:
                         await client.sign_in(phone, code, phone_code_hash=sent_code.phone_code_hash)
@@ -171,20 +173,18 @@ class SessionModel:
         """
 
         try:
-            sessions = self.db.execute_query(query, (phone,))
-            return sessions[0] if sessions else None
+            session = self.db.execute_query(query, (phone,))
+            return session[0] if session else None
         except Exception as e:
             logger.error(f"Ошибка получения сессии по номеру телефона {phone}: {e}")
             raise
 
-    def get_available_sessions_with_proxy(self, limit=10):
-        """Получает доступные активные сессии с привязанными прокси"""
+    def get_available_sessions(self, limit=10):
+        """Получает доступные активные сессии"""
         query = """
-        SELECT s.phone, s.api_id, s.api_hash, s.session_file, s.proxy_id, p.type as proxy_type,
-               p.host, p.port, p.username as proxy_username, p.password as proxy_password
+        SELECT s.phone, s.api_id, s.api_hash, s.session_file, s.proxy_id
         FROM telegram_sessions s
-        LEFT JOIN proxies p ON s.proxy_id = p.id
-        WHERE s.is_active = TRUE AND (p.is_active IS NULL OR p.is_active = TRUE)
+        WHERE s.is_active = TRUE
         ORDER BY s.last_used ASC
         LIMIT %s
         """
@@ -245,6 +245,40 @@ class SessionModel:
         except Exception as e:
             logger.error(f"Ошибка обновления времени последнего использования сессии {session_id}: {e}")
             raise
+
+    def batch_update_sessions_status(self, session_updates):
+        """
+        Пакетно обновляет статусы нескольких сессий одним запросом
+
+        Args:
+            session_updates: Список кортежей (session_id, is_active)
+        """
+        if not session_updates:
+            return
+
+        # Создаем основу запроса
+        query = """
+        UPDATE telegram_sessions
+        SET is_active = CASE id 
+        """
+
+        # Добавляем условные выражения для каждой сессии
+        id_list = []
+        for session_id, is_active in session_updates:
+            query += f" WHEN {session_id} THEN {1 if is_active else 0} "
+            id_list.append(str(session_id))
+
+        # Завершаем запрос
+        query += " END, last_used = CURRENT_TIMESTAMP "
+        query += f" WHERE id IN ({','.join(id_list)})"
+
+        try:
+            self.db.execute_query(query)
+            logger.info(f"Статусы {len(session_updates)} сессий успешно обновлены")
+            return len(session_updates)
+        except Exception as e:
+            logger.error(f"Ошибка пакетного обновления статусов сессий: {e}")
+            return None
 
     def assign_proxy_to_session(self, session_id, proxy_id):
         """Назначает прокси для сессии"""

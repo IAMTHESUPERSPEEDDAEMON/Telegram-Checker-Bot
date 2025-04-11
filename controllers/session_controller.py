@@ -1,26 +1,77 @@
-import logging
 import asyncio
 from telethon.sync import TelegramClient
-from models.session_model import SessionModel
+from telegram import Update
+from telegram.ext import ContextTypes
 from models.proxy_model import ProxyModel
+from services.session_service import SessionService
+from utils.logger import Logger
+from views.telegram_view import TelegramView
+import utils
 
-
+logger = Logger()
 class SessionController:
     def __init__(self):
-        self.session_model = SessionModel()
+        self.session_service = SessionService()
         self.proxy_model = ProxyModel()
+        self.view = TelegramView()
+        self.is_admin = utils.admin_checker.is_admin
 
-    def delete_session(self, session_id):
+    async def delete_session(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Удаляет сессию из базы данных"""
-        find_session = self.session_model.get_session_by_id(session_id)
-        if find_session:
-            deleted_session = self.session_model.delete_session(session_id)
-            if deleted_session:
-                return {'status': 'success', 'message': f'Сессия {session_id} успешно удалена.'}
-            else:
-                return {'status': 'error', 'message': f'Сессия {session_id} не найдена в базе данных.'}
-        else:
-            return {'status': 'error', 'message': f'Сессия {session_id} не найдена в базе данных.'}
+        if not await self.is_admin(update, context):
+            await self.view.send_access_denied(update, context)
+            return
+
+        if not context.args or len(context.args) < 1:
+            await self.view.send_message(update, context, "Не указан ID сессии для удаления.")
+            return
+
+        session_id = int(context.args[0])
+        result = self.session_service.delete_session(session_id)
+        await self.view.send_result_message(update, context, result)
+
+
+    async def start_add_session(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Начинает процесс добавления сессии"""
+        if update.effective_user.id not in ADMIN_IDS:
+            await self.view.send_access_denied(update, context)
+            return
+
+        # Проверяем аргументы команды
+        if not context.args or len(context.args) < 3:
+            await self.view.send_message(
+                update,
+                context,
+                "Использование: /add_session <телефон> <api_id> <api_hash> [proxy_id]"
+            )
+            return ConversationHandler.END
+
+        phone = context.args[0]
+        api_id = context.args[1]
+        api_hash = context.args[2]
+
+        # Сохраняем данные в словаре сессий
+        session_data[user_id] = {
+            'phone': phone,
+            'api_id': api_id,
+            'api_hash': api_hash,
+            'chat_id': update.effective_chat.id,
+            'phone_code_hash': None  # Будет заполнено позже
+        }
+
+        # Запускаем процесс создания сессии в отдельной задаче
+        asyncio.create_task(self.create_session_async(user_id, update, context))
+
+        # Сообщаем пользователю, что процесс начат
+        await self.view.send_message(
+            update,
+            context,
+            f"Начинаем создание сессии для номера {phone}. Ожидайте запрос кода..."
+        )
+
+        return WAITING_FOR_CODE
+
+
 
     def update_session(self, session_id, new_params):
         """Обновляет детали сессии"""
@@ -35,24 +86,11 @@ class SessionController:
             else:
                 return {'status': 'error', 'message': f'Ошибка при обновлении сессии {session_id}.'}
 
-    async def add_session(self, phone, api_id, api_hash):
-        """Создаёт новую сессию и добавляет её в бд"""
-        duplicate_session = await self.session_model.get_session_by_phone(phone)
-        if duplicate_session is not None:
-            return {'status': 'error', 'message': f'Сессия для телефона {phone} уже существует.'}
-        else:
-            session_data = await self.session_model.create_session(phone, api_id, api_hash)
-            session_id = await self.session_model.add_session_to_db(session_data)
-
-            if isinstance(session_id, int) and session_id is not None:
-                return {'status': 'success', 'message': f'Session {phone} added successfully.'}
-            else:
-                return {'status': 'error', 'message': f'Error while adding session for phone {phone}.\n{session_id}'}
 
     async def check_session(self, session_phone):
         """Проверяет работоспособность одной сессии"""
         # получаем сессию по номеру
-        session = self.session_model.get_session_by_phone(session_phone)
+        session = await self.session_model.get_session_by_phone(session_phone)
         if session:
             result = {
                 'id': session['id'],
@@ -76,19 +114,15 @@ class SessionController:
                 session['api_hash'],
                 proxy=proxy
             )
-
             # Подключаемся
             await client.connect()
-
             # Проверяем авторизацию
             if await client.is_user_authorized():
                 result['is_working'] = True
-
                 # Обновляем статус сессии
                 self.session_model.update_session_status(session['id'], True)
             else:
                 result['error'] = "Сессия не авторизована"
-
                 # Обновляем статус сессии
                 self.session_model.update_session_status(session['id'], False)
 
@@ -117,26 +151,45 @@ class SessionController:
 
             # Обрабатываем результаты
             processed_results = []
+            session_updates = []  # Список обновлений для пакетной записи в БД
+
             for i, result in enumerate(results):
+                session_id = sessions[i]['id']
+                phone = sessions[i]['phone']
+
                 if isinstance(result, Exception):
                     # Обрабатываем исключение
+                    is_working = False
+                    error_msg = str(result)
                     processed_results.append({
-                        'id': sessions[i]['id'],
-                        'phone': sessions[i]['phone'],
-                        'is_working': False,
-                        'error': str(result)
+                        'id': session_id,
+                        'phone': phone,
+                        'is_working': is_working,
+                        'error': error_msg
                     })
-
-                    # Обновляем статус сессии
-                    self.session_model.update_session_status(sessions[i]['id'], False)
                 else:
+                    # Успешная проверка
+                    is_working = True  # По умолчанию считаем работающей
+                    if isinstance(result, dict) and 'is_working' in result:
+                        is_working = result['is_working']
                     processed_results.append(result)
 
-            return processed_results
+                # Добавляем в список для пакетного обновления
+                session_updates.append((session_id, is_working))
+
+            # Выполняем одно пакетное обновление вместо множества отдельных запросов
+            if session_updates:
+                update_result = self.session_model.batch_update_sessions_status(session_updates)
+            updated_session_info = self.session_model.get_available_sessions(limit=1000)
+            non_active = int(len(processed_results)) - int(len(updated_session_info))
+
+            return {'status': 'success',
+                    'message': f'Проверенно {int(len(processed_results))} сессий, активных = {int(len(updated_session_info))}, не активных = {non_active}'}
+
 
         except Exception as e:
-            logging.error(f"Ошибка при проверке сессий: {e}")
-            raise
+            logger.error(f"Ошибка при проверке сессий: {e}")
+            return {'status': 'error', 'message': f"Ошибка при проверке сессий: {e}"}
 
     async def assign_proxies_to_sessions(self):
         """Назначает прокси для сессий без прокси"""
@@ -151,7 +204,7 @@ class SessionController:
             available_proxies = self.proxy_model.get_available_proxies()
 
             if not available_proxies:
-                logging.warning("Нет доступных прокси для назначения.")
+                logger.warning("Нет доступных прокси для назначения.")
                 return {'status': 'warning', 'message': f'Нет доступных прокси для назначения.'}
 
             assigned_count = 0
@@ -160,11 +213,11 @@ class SessionController:
                 self.session_model.assign_proxy_to_session(session['id'], proxy['id'])
                 assigned_count += 1
 
-            logging.info(f"Назначено прокси для {assigned_count} сессий.")
+            logger.info(f"Назначено прокси для {assigned_count} сессий.")
             return {'status': 'success', 'message': f'ВСе свободные прокси привязаны, кол-во обработанных строк: {assigned_count}.'}
 
         except Exception as e:
-            logging.error(f"Ошибка при назначении прокси: {e}")
+            logger.error(f"Ошибка при назначении прокси: {e}")
             raise
 
     async def get_sessions_stats(self):

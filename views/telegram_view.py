@@ -69,3 +69,15 @@ class TelegramView:
         """Отправляет файл пользователю"""
         with open(file_path, 'rb') as file:
             await context.bot.send_document(chat_id=update.effective_chat.id, document=file, caption=caption)
+
+    async def send_code_request(self, chat_id, context, phone):
+        """Отправляет запрос кода подтверждения пользователю"""
+        message = f"📱 Введите код подтверждения для номера {phone}:"
+        sent_msg = await context.bot.send_message(chat_id=chat_id, text=message)
+        return sent_msg.message_id
+
+    async def send_password_request(self, chat_id, context, phone):
+        """Отправляет запрос пароля двухфакторной аутентификации"""
+        message = f"🔐 Введите пароль двухфакторной аутентификации для номера {phone}:"
+        sent_msg = await context.bot.send_message(chat_id=chat_id, text=message)
+        return sent_msg.message_id

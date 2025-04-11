@@ -1,9 +1,9 @@
 import mysql.connector
 from mysql.connector import pooling
-import logging
 from config.config import DB_CONFIG
+from utils.logger import Logger
 
-
+logger = Logger()
 class DatabaseManager:
     _instance = None
 
@@ -19,11 +19,12 @@ class DatabaseManager:
             self.pool = pooling.MySQLConnectionPool(
                 pool_name="telegram_checker_pool",
                 pool_size=10,
+                pool_reset_session=True,
                 **DB_CONFIG
             )
-            logging.info("Database connection pool created successfully")
+            logger.info("Database connection pool created successfully")
         except mysql.connector.Error as err:
-            logging.error(f"Error creating connection pool: {err}")
+            logger.error(f"Error creating connection pool: {err}")
             raise
 
     def _initialize_tables(self):
@@ -107,9 +108,9 @@ class DatabaseManager:
                 cursor.execute(query)
 
             connection.commit()
-            logging.info("Database tables initialized successfully")
+            logger.info("Database tables initialized successfully")
         except mysql.connector.Error as err:
-            logging.error(f"Error initializing database tables: {err}")
+            logger.error(f"Error initializing database tables: {err}")
             raise
         finally:
             cursor.close()
@@ -120,7 +121,7 @@ class DatabaseManager:
         try:
             return self.pool.get_connection()
         except mysql.connector.Error as err:
-            logging.error(f"Error getting connection from pool: {err}")
+            logger.error(f"Error getting connection from pool: {err}")
             raise
 
     def execute_query(self, query, params=None, fetch=False):
@@ -130,6 +131,7 @@ class DatabaseManager:
         result = None
 
         try:
+            connection.start_transaction()
             cursor.execute(query, params or ())
 
             if query.strip().upper().startswith('SELECT') or fetch:
@@ -140,8 +142,79 @@ class DatabaseManager:
 
             return result
         except mysql.connector.Error as err:
-            logging.error(f"Error executing query: {err}")
+            logger.error(f"Error executing query: {err}")
             connection.rollback()
+            raise
+        finally:
+            cursor.close()
+            connection.close()
+
+    def execute_batch_query(self, query, params_list):
+        """
+        Выполняет пакетно несколько идентичных запросов с разными параметрами.
+
+        Args:
+            query: SQL-запрос с заполнителями
+            params_list: Список кортежей с параметрами
+
+        Returns:
+            Количество обработанных строк
+        """
+        if not params_list:
+            return 0
+
+        connection = self.get_connection()
+        cursor = connection.cursor()
+        rows_affected = 0
+
+        try:
+            connection.start_transaction()
+            cursor.executemany(query, params_list)
+            connection.commit()
+            rows_affected = cursor.rowcount
+            return rows_affected
+        except mysql.connector.Error as err:
+            self.logger.error(f"Error executing batch query: {err}")
+            connection.rollback()
+            raise
+        finally:
+            cursor.close()
+            connection.close()
+
+    def execute_transaction(self, queries_with_params):
+        """
+        Выполняет несколько запросов в одной транзакции.
+
+        Args:
+            queries_with_params: Список кортежей (query, params)
+
+        Returns:
+            Список результатов для каждого запроса
+        """
+        if not queries_with_params:
+            return []
+
+        connection = self.get_connection()
+        cursor = connection.cursor(dictionary=True)
+        results = []
+
+        try:
+            connection.start_transaction()
+
+            for query, params in queries_with_params:
+                cursor.execute(query, params or ())
+
+                if query.strip().upper().startswith('SELECT'):
+                    results.append(cursor.fetchall())
+                else:
+                    results.append(cursor.lastrowid if cursor.lastrowid else cursor.rowcount)
+
+            connection.commit()
+            return results
+        except mysql.connector.Error as err:
+            self.logger.error(f"Error executing transaction: {err}")
+            connection.rollback()
+            raise
         finally:
             cursor.close()
             connection.close()
