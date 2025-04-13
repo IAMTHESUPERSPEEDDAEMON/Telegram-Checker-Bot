@@ -108,8 +108,6 @@ class BotController:
     async def assign_proxys_to_sessions_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Присваивает прокси к сессиям"""
         await self.session_controller.assign_proxies_to_sessions_command(update, context)
-    async def delete_session_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        await self.session_controller.delete_session(update, context)
 
 
     async def add_proxy_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):

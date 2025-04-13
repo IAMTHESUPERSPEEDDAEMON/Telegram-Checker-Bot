@@ -31,8 +31,7 @@ class SessionController:
             return
 
         session_id = int(context.args[0])
-        result = await self.session_service.delete_session(session_id)
-        await self.view.send_result_message(update, context, result)
+        await self.view.send_result_message(update, context, await self.session_service.delete_session(session_id))
 
 
     async def start_add_session(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -203,9 +202,7 @@ class SessionController:
             return
 
         await self.view.send_message(update, context, "Начинаем проверку сессий...")
-
-        results = await self.session_service.check_all_sessions()
-        await self.view.send_result_message(update, context, results)
+        await self.view.send_result_message(update, context, await self.session_service.check_all_sessions())
 
 
 
@@ -224,3 +221,10 @@ class SessionController:
         session_id = int(context.args[0])
         result = await self.session_service.update_session(session_id, json.loads(''.join(context.args[1:])))
         await self.view.send_result_message(update, context, result)
+
+
+    async def assign_proxies_to_sessions_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE()):
+        """Присваивает прокси к сессиям."""
+        if not self.is_admin(update, context):
+            return
+        await self.view.send_result_message(update, context, await self.session_service.assign_proxies_to_sessions())
