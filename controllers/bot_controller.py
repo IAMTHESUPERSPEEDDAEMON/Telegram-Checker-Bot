@@ -14,9 +14,6 @@ logger = Logger()
 # Состояния для ConversationHandler
 WAITING_FOR_CODE = 1
 WAITING_FOR_PASSWORD = 2
-
-# Словарь для хранения данных сессии во время создания
-session_data = {}
 class BotController:
     def __init__(self):
         self.checker = CheckerController()
@@ -50,12 +47,14 @@ class BotController:
         self.app.add_handler(CommandHandler("assign_proxys_to_sessions", self.assign_proxys_to_sessions_command))
         # Регистрация обработчика беседы для добавления сессии
         add_session_conv = ConversationHandler(
-            entry_points=[CommandHandler('add_session', self.start_add_session)],
+            entry_points=[CommandHandler('add_session', self.add_session)],
             states={
-                WAITING_FOR_CODE: [MessageHandler(filters.TEXT & ~filters.COMMAND, self.process_code)],
-                WAITING_FOR_PASSWORD: [MessageHandler(filters.TEXT & ~filters.COMMAND, self.process_password)]
+                WAITING_FOR_CODE: [
+                    MessageHandler(filters.TEXT & ~filters.COMMAND, self.session_controller.process_code)],
+                WAITING_FOR_PASSWORD: [
+                    MessageHandler(filters.TEXT & ~filters.COMMAND, self.session_controller.process_password)]
             },
-            fallbacks=[CommandHandler('cancel', self.cancel_add_session)]
+            fallbacks=[CommandHandler('cancel', self.session_controller.cancel_add_session)]
         )
         self.app.add_handler(add_session_conv)
 
@@ -88,207 +87,27 @@ class BotController:
         # Отправляем статус
         await self.view.send_status_message(update, context, sessions_stats['message'], proxies_stats)
 
-    async def start_add_session(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Начинает процесс добавления сессии"""
-        user_id = update.effective_user.id
 
-        # Проверяем, является ли пользователь администратором
-        if user_id not in ADMIN_IDS:
-            await self.view.send_access_denied(update, context)
-            return ConversationHandler.END
-
-        # Проверяем аргументы команды
-        if not context.args or len(context.args) < 3:
-            await self.view.send_message(
-                update,
-                context,
-                "Использование: /add_session <телефон> <api_id> <api_hash> [proxy_id]"
-            )
-            return ConversationHandler.END
-
-        phone = context.args[0]
-        api_id = context.args[1]
-        api_hash = context.args[2]
-
-        # Сохраняем данные в словаре сессий
-        session_data[user_id] = {
-            'phone': phone,
-            'api_id': api_id,
-            'api_hash': api_hash,
-            'chat_id': update.effective_chat.id,
-            'phone_code_hash': None  # Будет заполнено позже
-        }
-
-        # Запускаем процесс создания сессии в отдельной задаче
-        asyncio.create_task(self.create_session_async(user_id, update, context))
-
-        # Сообщаем пользователю, что процесс начат
-        await self.view.send_message(
-            update,
-            context,
-            f"Начинаем создание сессии для номера {phone}. Ожидайте запрос кода..."
-        )
-
-        return WAITING_FOR_CODE
-
-    async def create_session_async(self, user_id, update, context):
-        """Запускает процесс создания сессии асинхронно"""
-        data = session_data[user_id]
-
-        async def code_callback(phone, phone_code_hash):
-            """Колбэк для получения кода подтверждения через Telegram"""
-            # Сохраняем phone_code_hash для использования при входе
-            session_data[user_id]['phone_code_hash'] = phone_code_hash
-
-            # Отправляем запрос кода пользователю
-            await self.view.send_code_request(data['chat_id'], context, phone)
-
-            # Ждем, пока код будет введен (это будет сделано в process_code)
-            # Создаем и ждем будущее значение
-            session_data[user_id]['code_future'] = asyncio.Future()
-            return await session_data[user_id]['code_future']
-
-        async def password_callback(phone):
-            """Колбэк для получения пароля через Telegram"""
-            # Отправляем запрос пароля пользователю
-            await self.view.send_password_request(data['chat_id'], context, phone)
-
-            # Ждем, пока пароль будет введен
-            session_data[user_id]['password_future'] = asyncio.Future()
-            return await session_data[user_id]['password_future']
-
-        # Запускаем создание сессии с нашими колбэками
-        result = await self.session_controller.add_session(
-            data['phone'],
-            data['api_id'],
-            data['api_hash'],
-            code_callback=code_callback,
-            password_callback=password_callback
-        )
-
-        # Отправляем результат пользователю
-        await self.view.send_result_message(update, context, result)
-
-        # Завершаем диалог
-        return ConversationHandler.END
-
-    async def process_code(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Обрабатывает полученный код подтверждения"""
-        user_id = update.effective_user.id
-        code = update.message.text.strip()
-
-        if user_id in session_data and 'code_future' in session_data[user_id]:
-            # Устанавливаем результат будущего значения
-            if not session_data[user_id]['code_future'].done():
-                session_data[user_id]['code_future'].set_result(code)
-
-            await self.view.send_message(
-                update,
-                context,
-                f"✅ Код получен: {code}. Выполняется вход..."
-            )
-
-            # Если двухфакторная аутентификация не требуется, процесс завершится автоматически
-            # Иначе будет запрошен пароль через password_callback
-            return WAITING_FOR_PASSWORD
-        else:
-            await self.view.send_message(
-                update,
-                context,
-                "❌ Что-то пошло не так. Пожалуйста, начните процесс заново с команды /add_session"
-            )
-            return ConversationHandler.END
-
-    async def process_password(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Обрабатывает полученный пароль двухфакторной аутентификации"""
-        user_id = update.effective_user.id
-        password = update.message.text.strip()
-
-        # Для безопасности, удаляем сообщение с паролем
-        await update.message.delete()
-
-        if user_id in session_data and 'password_future' in session_data[user_id]:
-            # Устанавливаем результат будущего значения
-            if not session_data[user_id]['password_future'].done():
-                session_data[user_id]['password_future'].set_result(password)
-
-            await self.view.send_message(
-                update,
-                context,
-                "✅ Пароль получен. Выполняется вход..."
-            )
-
-            # Процесс завершится автоматически после проверки пароля
-            return ConversationHandler.END
-        else:
-            await self.view.send_message(
-                update,
-                context,
-                "❌ Что-то пошло не так. Пожалуйста, начните процесс заново с команды /add_session"
-            )
-            return ConversationHandler.END
-
-    async def cancel_add_session(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Отменяет процесс добавления сессии"""
-        user_id = update.effective_user.id
-
-        if user_id in session_data:
-            # Если есть активные futures, отменяем их
-            if 'code_future' in session_data[user_id] and not session_data[user_id]['code_future'].done():
-                session_data[user_id]['code_future'].cancel()
-
-            if 'password_future' in session_data[user_id] and not session_data[user_id]['password_future'].done():
-                session_data[user_id]['password_future'].cancel()
-
-            # Удаляем данные сессии
-            del session_data[user_id]
-
-        await self.view.send_message(
-            update,
-            context,
-            "🚫 Процесс добавления сессии отменен."
-        )
-
-        return ConversationHandler.END
-
+    async def add_session(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Обрабатывает команду /add_session - добавляет новую сессию"""
+        await self.session_controller.start_add_session(update, context)
 
     async def check_sessions_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обрабатывает команду /check_sessions - проверяет работоспособность сессий"""
-        # Проверяем, является ли пользователь администратором
-        if update.effective_user.id not in ADMIN_IDS:
-            await self.view.send_access_denied(update, context)
-            return
-
-        await self.view.send_message(update, context, "Начинаем проверку сессий...")
-
-        try:
-            results = await self.session_controller.check_all_sessions()
-            await self.view.send_sessions_check_results(update, context, results)
-        except Exception as e:
-            await self.view.send_message(
-                update,
-                context,
-                f"Ошибка при проверке сессий: {str(e)}"
-            )
-
+        # Delegation to session controller
+        await self.session_controller.check_sessions_command(update, context)
 
     async def update_session_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обновляет данные сессии."""
-        if update.effective_user.id not in ADMIN_IDS:
-            await self.view.send_access_denied(update, context)
-            return
+        await self.session_controller.update_session_command(update, context)
 
-        if not context.args or len(context.args) < 2:
-            await self.view.send_message(
-                update, context,
-                "Использование: /update_session <session_id> <новые параметры в формате JSON>"
-            )
-            return
+    async def delete_session_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Удаляет сессию по указанному ID"""
+        await self.session_controller.delete_session(update, context)
 
-        session_id = int(context.args[0])
-        result = self.session_controller.update_session(session_id, json.loads(''.join(context.args[1:])))
-
-
+    async def assign_proxys_to_sessions_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Присваивает прокси к сессиям"""
+        await self.session_controller.assign_proxies_to_sessions_command(update, context)
     async def delete_session_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         await self.session_controller.delete_session(update, context)
 

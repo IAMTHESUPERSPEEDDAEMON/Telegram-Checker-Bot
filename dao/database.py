@@ -18,7 +18,7 @@ class DatabaseManager:
         try:
             self.pool = pooling.MySQLConnectionPool(
                 pool_name="telegram_checker_pool",
-                pool_size=10,
+                pool_size=100,
                 pool_reset_session=True,
                 **DB_CONFIG
             )
@@ -174,7 +174,7 @@ class DatabaseManager:
             rows_affected = cursor.rowcount
             return rows_affected
         except mysql.connector.Error as err:
-            self.logger.error(f"Error executing batch query: {err}")
+            logger.error(f"Error executing batch query: {err}")
             connection.rollback()
             raise
         finally:
@@ -212,7 +212,7 @@ class DatabaseManager:
             connection.commit()
             return results
         except mysql.connector.Error as err:
-            self.logger.error(f"Error executing transaction: {err}")
+            logger.error(f"Error executing transaction: {err}")
             connection.rollback()
             raise
         finally:

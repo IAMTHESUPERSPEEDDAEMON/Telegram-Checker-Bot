@@ -55,16 +55,6 @@ class TelegramView:
         message = f"Найдено {result['telegram_found']} номеров с Telegram из {result['total_checked']}"
         await update.message.reply_text(message)
 
-    async def send_sessions_check_results(self, update: Update, context: ContextTypes.DEFAULT_TYPE, results: list):
-        """Отправляет результаты проверки сессий"""
-        message = f"Проверено {len(results)} сессий. Рабочие: {sum(1 for r in results if r['status'] == 'ok')}"
-        await update.message.reply_text(message)
-
-    async def send_proxies_check_results(self, update: Update, context: ContextTypes.DEFAULT_TYPE, results: list):
-        """Отправляет результаты проверки прокси"""
-        message = f"Проверено {len(results)} прокси. Рабочие: {sum(1 for r in results if r['status'] == 'ok')}"
-        await update.message.reply_text(message)
-
     async def send_document(self, update: Update, context: ContextTypes.DEFAULT_TYPE, file_path: str, caption: str):
         """Отправляет файл пользователю"""
         with open(file_path, 'rb') as file:

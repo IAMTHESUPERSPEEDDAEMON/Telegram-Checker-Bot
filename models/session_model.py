@@ -280,21 +280,21 @@ class SessionModel:
             logger.error(f"Ошибка пакетного обновления статусов сессий: {e}")
             return None
 
-    def assign_proxy_to_session(self, session_id, proxy_id):
-        """Назначает прокси для сессии"""
+    def assign_proxies_to_sessions(self, params_list):
+        """Назначает прокси для сессий"""
         query = """
         UPDATE telegram_sessions
         SET proxy_id = %s
         WHERE id = %s
         """
-        params = (proxy_id, session_id)
 
         try:
-            self.db.execute_query(query, params)
-            logger.info(f"Привязана прокси {proxy_id} к сессии {session_id}")
+            assigned_count = self.db.execute_batch_query(query, params_list)
+            logger.info(f"Колличество прокси успешно назначен: {assigned_count}")
+            return assigned_count
         except Exception as e:
-            logger.error(f"Ошибка привязки прокси к сессии {session_id}: {e}")
-            raise
+            logger.error(f"Ошибка привязки проксей к сессиям: {e}")
+            return e
 
     def get_all_sessions(self):
         """Возвращает все сессии"""

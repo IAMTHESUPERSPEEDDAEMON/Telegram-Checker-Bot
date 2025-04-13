@@ -1,7 +1,9 @@
 import asyncio
-from telethon.sync import TelegramClient
+import json
+
 from telegram import Update
-from telegram.ext import ContextTypes
+from telegram.ext import ContextTypes, ConversationHandler
+from controllers.bot_controller import WAITING_FOR_CODE, WAITING_FOR_PASSWORD
 from models.proxy_model import ProxyModel
 from services.session_service import SessionService
 from utils.logger import Logger
@@ -9,6 +11,9 @@ from views.telegram_view import TelegramView
 import utils
 
 logger = Logger()
+
+# Словарь для хранения данных сессии во время создания
+session_data = {}
 class SessionController:
     def __init__(self):
         self.session_service = SessionService()
@@ -19,7 +24,6 @@ class SessionController:
     async def delete_session(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Удаляет сессию из базы данных"""
         if not await self.is_admin(update, context):
-            await self.view.send_access_denied(update, context)
             return
 
         if not context.args or len(context.args) < 1:
@@ -27,14 +31,13 @@ class SessionController:
             return
 
         session_id = int(context.args[0])
-        result = self.session_service.delete_session(session_id)
+        result = await self.session_service.delete_session(session_id)
         await self.view.send_result_message(update, context, result)
 
 
     async def start_add_session(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Начинает процесс добавления сессии"""
-        if update.effective_user.id not in ADMIN_IDS:
-            await self.view.send_access_denied(update, context)
+        if not await self.is_admin(update, context):
             return
 
         # Проверяем аргументы команды
@@ -46,6 +49,7 @@ class SessionController:
             )
             return ConversationHandler.END
 
+        user_id = update.effective_user.id
         phone = context.args[0]
         api_id = context.args[1]
         api_hash = context.args[2]
@@ -72,158 +76,151 @@ class SessionController:
         return WAITING_FOR_CODE
 
 
+    async def create_session_async(self, user_id, update, context):
+        """Запускает процесс создания сессии асинхронно"""
+        data = session_data[user_id]
 
-    def update_session(self, session_id, new_params):
-        """Обновляет детали сессии"""
-        is_exists = self.session_model.get_session_by_id(session_id)
-        if is_exists is None:
-            return {'status': 'error', 'message': f'Сессия {session_id} не была найдена'}
-        else:
-            updated_session = self.session_model.update_session(session_id, None, new_params['api_id'], new_params['api_hash'], None)
+        async def code_callback(phone, phone_code_hash):
+            """Колбэк для получения кода подтверждения через Telegram"""
+            # Сохраняем phone_code_hash для использования при входе
+            session_data[user_id]['phone_code_hash'] = phone_code_hash
 
-            if updated_session:
-                return {'status': 'success', 'message': f'Сессия {session_id} успешно обновлена.'}
-            else:
-                return {'status': 'error', 'message': f'Ошибка при обновлении сессии {session_id}.'}
+            # Отправляем запрос кода пользователю
+            await self.view.send_code_request(data['chat_id'], context, phone)
 
+            # Ждем, пока код будет введен (это будет сделано в process_code)
+            # Создаем и ждем будущее значение
+            session_data[user_id]['code_future'] = asyncio.Future()
+            return await session_data[user_id]['code_future']
 
-    async def check_session(self, session_phone):
-        """Проверяет работоспособность одной сессии"""
-        # получаем сессию по номеру
-        session = await self.session_model.get_session_by_phone(session_phone)
-        if session:
-            result = {
-                'id': session['id'],
-                'phone': session['phone'],
-                'is_working': False,
-                'error': None
-            }
-        else:
-            return {'status': 'error', 'message': f'Сессия {session_phone} не найдена'}
+        async def password_callback(phone):
+            """Колбэк для получения пароля через Telegram"""
+            # Отправляем запрос пароля пользователю
+            await self.view.send_password_request(data['chat_id'], context, phone)
 
-        # Форматируем прокси для Telethon
-        proxy = None
-        if 'proxy_id' in session and session['proxy_id']:
-            proxy = self.proxy_model.format_proxy_for_telethon(self.proxy_model.get_proxy_by_id(session['proxy_id']))
+            # Ждем, пока пароль будет введен
+            session_data[user_id]['password_future'] = asyncio.Future()
+            return await session_data[user_id]['password_future']
 
-        try:
-            # Создаем клиента
-            client = TelegramClient(
-                session['session_file'],
-                session['api_id'],
-                session['api_hash'],
-                proxy=proxy
+        # Запускаем создание сессии с нашими колбэками
+        result = await self.session_service.add_session(
+            data['phone'],
+            data['api_id'],
+            data['api_hash'],
+            code_callback=code_callback,
+            password_callback=password_callback
+        )
+
+        # Отправляем результат пользователю
+        await self.view.send_result_message(update, context, result)
+
+        # Завершаем диалог
+        return ConversationHandler.END
+
+    async def process_code(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Обрабатывает полученный код подтверждения"""
+        user_id = update.effective_user.id
+        code = update.message.text.strip()
+
+        if user_id in session_data and 'code_future' in session_data[user_id]:
+            # Устанавливаем результат будущего значения
+            if not session_data[user_id]['code_future'].done():
+                session_data[user_id]['code_future'].set_result(code)
+
+            await self.view.send_message(
+                update,
+                context,
+                f"✅ Код получен: {code}. Выполняется вход..."
             )
-            # Подключаемся
-            await client.connect()
-            # Проверяем авторизацию
-            if await client.is_user_authorized():
-                result['is_working'] = True
-                # Обновляем статус сессии
-                self.session_model.update_session_status(session['id'], True)
-            else:
-                result['error'] = "Сессия не авторизована"
-                # Обновляем статус сессии
-                self.session_model.update_session_status(session['id'], False)
 
-            # Отключаемся
-            await client.disconnect()
-
-        except Exception as e:
-            result['error'] = str(e)
-
-            # Обновляем статус сессии
-            self.session_model.update_session_status(session['id'], False)
-
-        return result
-
-    async def check_all_sessions(self):
-        """Проверяет работоспособность всех сессий"""
-        try:
-            # получаем все сессии
-            sessions = self.session_model.get_all_sessions()
-
-            # Создаем задачи для проверки каждой сессии
-            tasks = [self.check_session(session) for session in sessions]
-
-            # Запускаем все задачи параллельно
-            results = await asyncio.gather(*tasks, return_exceptions=True)
-
-            # Обрабатываем результаты
-            processed_results = []
-            session_updates = []  # Список обновлений для пакетной записи в БД
-
-            for i, result in enumerate(results):
-                session_id = sessions[i]['id']
-                phone = sessions[i]['phone']
-
-                if isinstance(result, Exception):
-                    # Обрабатываем исключение
-                    is_working = False
-                    error_msg = str(result)
-                    processed_results.append({
-                        'id': session_id,
-                        'phone': phone,
-                        'is_working': is_working,
-                        'error': error_msg
-                    })
-                else:
-                    # Успешная проверка
-                    is_working = True  # По умолчанию считаем работающей
-                    if isinstance(result, dict) and 'is_working' in result:
-                        is_working = result['is_working']
-                    processed_results.append(result)
-
-                # Добавляем в список для пакетного обновления
-                session_updates.append((session_id, is_working))
-
-            # Выполняем одно пакетное обновление вместо множества отдельных запросов
-            if session_updates:
-                update_result = self.session_model.batch_update_sessions_status(session_updates)
-            updated_session_info = self.session_model.get_available_sessions(limit=1000)
-            non_active = int(len(processed_results)) - int(len(updated_session_info))
-
-            return {'status': 'success',
-                    'message': f'Проверенно {int(len(processed_results))} сессий, активных = {int(len(updated_session_info))}, не активных = {non_active}'}
-
-
-        except Exception as e:
-            logger.error(f"Ошибка при проверке сессий: {e}")
-            return {'status': 'error', 'message': f"Ошибка при проверке сессий: {e}"}
-
-    async def assign_proxies_to_sessions(self):
-        """Назначает прокси для сессий без прокси"""
-        try:
-            # Получаем сессии без прокси
-            sessions_without_proxy = self.session_model.get_available_sessions_without_proxy()
-
-            if not sessions_without_proxy:
-                return {'status': 'error', 'message': f'Все сессии уже имеют прокси'}
-
-            # Получаем доступные прокси
-            available_proxies = self.proxy_model.get_available_proxies()
-
-            if not available_proxies:
-                logger.warning("Нет доступных прокси для назначения.")
-                return {'status': 'warning', 'message': f'Нет доступных прокси для назначения.'}
-
-            assigned_count = 0
-            for i, session in enumerate(sessions_without_proxy):
-                proxy = available_proxies[i % len(available_proxies)]  # Назначаем прокси по кругу
-                self.session_model.assign_proxy_to_session(session['id'], proxy['id'])
-                assigned_count += 1
-
-            logger.info(f"Назначено прокси для {assigned_count} сессий.")
-            return {'status': 'success', 'message': f'ВСе свободные прокси привязаны, кол-во обработанных строк: {assigned_count}.'}
-
-        except Exception as e:
-            logger.error(f"Ошибка при назначении прокси: {e}")
-            raise
-
-    async def get_sessions_stats(self):
-        """Получаем статистику по сессиям"""
-        stats = await self.session_model.get_sessions_stats()
-        if stats is not None:
-            return {'status': 'success', 'message': stats}
+            # Если двухфакторная аутентификация не требуется, процесс завершится автоматически
+            # Иначе будет запрошен пароль через password_callback
+            return WAITING_FOR_PASSWORD
         else:
-            return {'status': 'warning', 'message': "Нет данных для статистики."}
+            await self.view.send_message(
+                update,
+                context,
+                "❌ Что-то пошло не так. Пожалуйста, начните процесс заново с команды /add_session"
+            )
+            return ConversationHandler.END
+
+    async def process_password(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Обрабатывает полученный пароль двухфакторной аутентификации"""
+        user_id = update.effective_user.id
+        password = update.message.text.strip()
+
+        # Для безопасности, удаляем сообщение с паролем
+        await update.message.delete()
+
+        if user_id in session_data and 'password_future' in session_data[user_id]:
+            # Устанавливаем результат будущего значения
+            if not session_data[user_id]['password_future'].done():
+                session_data[user_id]['password_future'].set_result(password)
+
+            await self.view.send_message(
+                update,
+                context,
+                "✅ Пароль получен. Выполняется вход..."
+            )
+
+            # Процесс завершится автоматически после проверки пароля
+            return ConversationHandler.END
+        else:
+            await self.view.send_message(
+                update,
+                context,
+                "❌ Что-то пошло не так. Пожалуйста, начните процесс заново с команды /add_session"
+            )
+            return ConversationHandler.END
+
+    async def cancel_add_session(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Отменяет процесс добавления сессии"""
+        user_id = update.effective_user.id
+
+        if user_id in session_data:
+            # Если есть активные futures, отменяем их
+            if 'code_future' in session_data[user_id] and not session_data[user_id]['code_future'].done():
+                session_data[user_id]['code_future'].cancel()
+
+            if 'password_future' in session_data[user_id] and not session_data[user_id]['password_future'].done():
+                session_data[user_id]['password_future'].cancel()
+
+            # Удаляем данные сессии
+            del session_data[user_id]
+
+        await self.view.send_message(
+            update,
+            context,
+            "🚫 Процесс добавления сессии отменен."
+        )
+
+        return ConversationHandler.END
+
+    async def check_sessions_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Обрабатывает команду /check_sessions - проверяет работоспособность сессий"""
+        # Проверяем, является ли пользователь администратором
+        if not self.is_admin(update, context):
+            return
+
+        await self.view.send_message(update, context, "Начинаем проверку сессий...")
+
+        results = await self.session_service.check_all_sessions()
+        await self.view.send_result_message(update, context, results)
+
+
+
+    async def update_session_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Обновляет данные сессии."""
+        if not self.is_admin(update, context):
+            return
+
+        if not context.args or len(context.args) < 2:
+            await self.view.send_message(
+                update, context,
+                "Использование: /update_session <session_id> <новые параметры в формате JSON>"
+            )
+            return
+
+        session_id = int(context.args[0])
+        result = await self.session_service.update_session(session_id, json.loads(''.join(context.args[1:])))
+        await self.view.send_result_message(update, context, result)
