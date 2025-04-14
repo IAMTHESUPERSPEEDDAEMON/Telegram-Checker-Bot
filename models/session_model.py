@@ -19,7 +19,7 @@ class SessionModel:
         params = (session_id,)
 
         try:
-            await self.db.execute_query(query, params)
+            self.db.execute_query(query, params)
             logger.info(f"Session {session_id} deleted")
             return True
         except Exception as e:
@@ -51,7 +51,7 @@ class SessionModel:
                     """
         params.append(session_id)
         try:
-            await self.db.execute_query(query, params)
+            self.db.execute_query(query, params)
             logger.info(f"Session {session_id} updated")
             return True
         except Exception as e:
@@ -74,10 +74,6 @@ class SessionModel:
         params = (phone, api_id, api_hash, string_session)
 
         result = self.db.execute_query(query, params)
-        #
-        # # Получение последнего вставленного id
-        # last_inserted_id_query = f"SELECT id FROM telegram_sessions WHERE phone='{phone}'"
-        # result = self.db.execute_query(last_inserted_id_query)
         logger.info(f'Успех! id Добавленной сессии для телефона {phone}: {result[0]}')
         return result[0]
 
@@ -115,10 +111,7 @@ class SessionModel:
                     sent_code = await client.send_code_request(phone)
 
                     # запрашиваем код
-                    if code_callback:
-                        code = await code_callback(phone, sent_code.phone_code_hash)
-                    else:
-                        code = input(f"Введите код для номера {phone}: ")
+                    code = await code_callback(phone, sent_code.phone_code_hash)
 
                     try:
                         await client.sign_in(phone, code, phone_code_hash=sent_code.phone_code_hash)
@@ -133,8 +126,9 @@ class SessionModel:
                     return None
 
             # Получаем строковое представление сессии
+            print(1)
             string_session = StringSession.save(client.session)
-
+            print(string_session)
             # Закрываем клиент
             await client.disconnect()
             return [phone, api_id, api_hash, string_session]

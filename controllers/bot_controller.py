@@ -128,7 +128,7 @@ class BotController:
 
     async def check_proxies_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обрабатывает команду /check_proxies - проверяет работоспособность прокси"""
-        await self.proxy_controller.check_proxies_command(update, context)
+        await self.proxy_controller.check_proxies_command(update)
 
     """Блок работы чекера ==========================================================================================="""
 

@@ -11,7 +11,7 @@ class ProxyService:
         """Удаляет прокси по его ID"""
         is_exists = await self.model.get_proxy_by_id(proxy_id)
         if is_exists is not None:
-            delete_proxy = self.model.delete_proxy_by_id(proxy_id)
+            delete_proxy = await self.model.delete_proxy_by_id(proxy_id)
             if delete_proxy:
                 return {'status': 'success', 'message': f'Прокси с ID {proxy_id} был удалён'}
             else:
@@ -23,7 +23,7 @@ class ProxyService:
     async def add_proxy(self, proxy_type, host, port, username=None, password=None):
         """Добавляет прокси в базу данных"""
         proxy_id = await self.model.add_proxy(proxy_type, host, port, username, password)
-        if proxy_id:
+        if proxy_id is not None and isinstance(proxy_id, int) and proxy_id > 0:
             return {'status': 'success', 'message': f'Прокси {proxy_id} был добавлен'}
         else:
             return {'status': 'error', 'message': f'Ошибка добавления прокси {proxy_id}'}
@@ -52,7 +52,7 @@ class ProxyService:
         # Получаем все прокси из базы
         proxies = await self.model.get_all_proxies()
 
-        if not proxies:
+        if proxies is None:
             return {'status': 'error', 'message': 'Не найдено прокси для проверки'}
 
         results = {'working': 0, 'failed': 0, 'total': len(proxies)}

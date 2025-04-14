@@ -10,7 +10,7 @@ class SessionService:
         self.session_model = SessionModel()
         self.proxy_model = ProxyModel()
 
-    async def delete_session(self, session_id):
+    async def delete_session_by_id(self, session_id):
         """Удаляет сессию из базы данных"""
         find_session = await self.session_model.get_session_by_id(session_id)
         if find_session is not None:
@@ -174,7 +174,7 @@ class SessionService:
             return {'status': 'error', 'message': f'Все сессии уже имеют прокси'}
 
         # Получаем доступные прокси
-        available_proxies = self.proxy_model.get_available_proxies()
+        available_proxies = await self.proxy_model.get_available_proxies()
 
         if not available_proxies:
             return {'status': 'error', 'message': f'Нет доступных прокси для назначения.'}

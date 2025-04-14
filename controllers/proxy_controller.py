@@ -61,7 +61,7 @@ class ProxyController:
         await self.view.send_result_message(update, await self.proxy_service.update_proxy(proxy_id, context.args))
 
 
-    async def check_proxies_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    async def check_proxies_command(self, update: Update):
         """Обрабатывает команду /check_proxies - проверяет работоспособность прокси"""
         # Проверяем, является ли пользователь администратором
         if not await is_admin(update):

@@ -16,7 +16,7 @@ class ProxyModel:
         params = (proxy_id,)
 
         try:
-            await self.db.execute_query(query, params)
+            self.db.execute_query(query, params)
             logger.info(f"Proxy {proxy_id} удалён")
             return True
         except Exception as e:
@@ -53,7 +53,7 @@ class ProxyModel:
         params.append(proxy_id)
 
         try:
-            await self.db.execute_query(query, params)
+            self.db.execute_query(query, params)
             logger.info(f"Proxy {proxy_id} данные обновлены")
             return True
         except Exception as e:
@@ -71,9 +71,9 @@ class ProxyModel:
         params = (proxy_type, host, port, username, password)
 
         try:
-            proxy_id = await self.db.execute_query(query, params)
+            proxy_id = self.db.execute_query(query, params)
             logger.info(f"Added new {proxy_type} proxy {host}:{port}")
-            return proxy_id[0]
+            return proxy_id
         except Exception as e:
             logger.error(f"Ошибка добавления прокси {host}:{port}: {e}")
             return None
@@ -87,14 +87,14 @@ class ProxyModel:
         """
         params = (proxy_id,)
         try:
-            proxy = await self.db.execute_query(query, params)
-            return proxy[0]
+            proxy = self.db.execute_query(query, params)
+            return proxy
         except Exception as e:
             logger.error(f"Прокси с id {proxy_id} не найден: {e}")
             return None
 
 
-    def get_all_proxies(self):
+    async def get_all_proxies(self):
         """Получает все прокси"""
         query = "SELECT * FROM proxies"
         try:
@@ -105,7 +105,7 @@ class ProxyModel:
             return None
 
 
-    def get_available_proxies(self, limit=10):
+    async def get_available_proxies(self, limit=10):
         """Получает доступные активные прокси в указанном количестве"""
         query = """
         SELECT p.* FROM proxies p
@@ -154,7 +154,7 @@ class ProxyModel:
         """
 
         try:
-            affected_rows = await self.db.execute_batch_query(query, proxy_statuses)
+            affected_rows = self.db.execute_batch_query(query, proxy_statuses)
             return affected_rows > 0
         except Exception as e:
             return False

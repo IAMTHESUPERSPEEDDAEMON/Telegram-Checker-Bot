@@ -26,7 +26,7 @@ class SessionController:
             return
 
         session_id = int(context.args[0])
-        await self.view.send_result_message(update, await self.session_service.delete_session(session_id))
+        await self.view.send_result_message(update, await self.session_service.delete_session_by_id(session_id))
 
 
     async def start_add_session(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -74,6 +74,7 @@ class SessionController:
 
         async def code_callback(phone, phone_code_hash):
             """Колбэк для получения кода подтверждения через Telegram"""
+            logger.info(f"[CALLBACK] code_callback triggered for {phone}")
             # Сохраняем phone_code_hash для использования при входе
             session_data[user_id]['phone_code_hash'] = phone_code_hash
 
@@ -113,6 +114,8 @@ class SessionController:
         """Обрабатывает полученный код подтверждения"""
         user_id = update.effective_user.id
         code = update.message.text.strip()
+        logger.info(f"[PROCESS_CODE] Code received: {code} for user_id: {user_id}")
+        logger.info(f"[PROCESS_CODE] Session data: {session_data.get(user_id)}")
 
         if user_id in session_data and 'code_future' in session_data[user_id]:
             # Устанавливаем результат будущего значения
