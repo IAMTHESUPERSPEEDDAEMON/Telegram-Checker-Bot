@@ -13,7 +13,7 @@ class SessionService:
     async def delete_session(self, session_id):
         """Удаляет сессию из базы данных"""
         find_session = await self.session_model.get_session_by_id(session_id)
-        if find_session:
+        if find_session is not None:
             deleted_session = await self.session_model.delete_session(session_id)
             if deleted_session:
                 return {'status': 'success', 'message': f'Сессия {session_id} успешно удалена.'}
@@ -76,7 +76,7 @@ class SessionService:
         # Форматируем прокси для Telethon
         proxy = None
         if 'proxy_id' in session and session['proxy_id']:
-            proxy = self.proxy_model.format_proxy_for_telethon(self.proxy_model.get_proxy_by_id(session['proxy_id']))
+            proxy = self.proxy_model.format_proxy_for_telethon(await self.proxy_model.get_proxy_by_id(session['proxy_id']))
 
         try:
             # Создаем клиента
@@ -152,7 +152,7 @@ class SessionService:
 
             # Выполняем одно пакетное обновление вместо множества отдельных запросов
             if session_updates:
-                update_result = self.session_model.batch_update_sessions_status(session_updates)
+                self.session_model.batch_update_sessions_status(session_updates)
             updated_session_info = self.session_model.get_available_sessions(limit=1000)
             non_active = int(len(processed_results)) - int(len(updated_session_info))
 

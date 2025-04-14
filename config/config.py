@@ -34,3 +34,7 @@ TEMP_DIR = os.path.join(STORAGE_DIR, 'temp')
 # Создание директорий, если они не существуют
 for directory in [LOG_DIR, STORAGE_DIR, SESSIONS_DIR, TEMP_DIR]:
     os.makedirs(directory, exist_ok=True)
+
+# Состояния для ConversationHandler
+WAITING_FOR_CODE = 1
+WAITING_FOR_PASSWORD = 2

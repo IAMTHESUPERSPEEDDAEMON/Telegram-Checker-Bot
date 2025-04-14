@@ -1,35 +1,13 @@
-import logging
 import socks
-from telethon.sessions import StringSession
-from telethon import TelegramClient
 from dao.database import DatabaseManager
+from utils.logger import Logger
 
-
+logger = Logger()
 class ProxyModel:
     def __init__(self):
         self.db = DatabaseManager()
 
-    def update_proxy(self, proxy_id, proxy_type=None, host=None, port=None, username=None, password=None):
-        """Обновляет детали прокси"""
-        query = """
-        UPDATE proxies
-        SET type = COALESCE(%s, type),
-            host = COALESCE(%s, host),
-            port = COALESCE(%s, port),
-            username = COALESCE(%s, username),
-            password = COALESCE(%s, password)
-        WHERE id = %s
-        """
-        params = (proxy_type, host, port, username, password, proxy_id)
-
-        try:
-            self.db.execute_query(query, params)
-            logging.info(f"Proxy {proxy_id} данные обновлены")
-        except Exception as e:
-            logging.error(f"Ошибка при обновлении прокси {proxy_id} детали: {e}")
-            raise
-
-    def delete_proxy(self, proxy_id):
+    async def delete_proxy_by_id(self, proxy_id):
         """Удаляет прокси из базы данных"""
         query = """
         DELETE FROM proxies
@@ -38,14 +16,52 @@ class ProxyModel:
         params = (proxy_id,)
 
         try:
-            self.db.execute_query(query, params)
-            logging.info(f"Proxy {proxy_id} удалён")
+            await self.db.execute_query(query, params)
+            logger.info(f"Proxy {proxy_id} удалён")
             return True
         except Exception as e:
-            logging.error(f"Ошибка при удалении прокси {proxy_id}: {e}")
-            raise
+            logger.error(f"Ошибка при удалении прокси {proxy_id}: {e}")
+            return False
 
-    def add_proxy(self, proxy_type, host, port, username, password):
+
+    async def update_proxy(self, proxy_id, proxy_type=None, host=None, port=None, username=None, password=None):
+        """Обновляет детали прокси"""
+        fields = []
+        params = []
+
+        if proxy_type is not None:
+            fields.append("proxy_type = %s")
+            params.append(proxy_type)
+        if host is not None:
+            fields.append("host = %s")
+            params.append(host)
+        if port is not None:
+            fields.append("port = %s")
+            params.append(port)
+        if username is not None:
+            fields.append("username = %s")
+            params.append(username)
+        if password is not None:
+            fields.append("password = %s")
+            params.append(password)
+
+        query = f"""
+                    UPDATE proxys 
+                    SET {', '.join(fields)}
+                    WHERE id = %s
+                    """
+        params.append(proxy_id)
+
+        try:
+            await self.db.execute_query(query, params)
+            logger.info(f"Proxy {proxy_id} данные обновлены")
+            return True
+        except Exception as e:
+            logger.error(f"Ошибка при обновлении прокси {proxy_id} детали: {e}")
+            return False
+
+
+    async def add_proxy(self, proxy_type, host, port, username, password):
         """Добавляет новый прокси в базу данных"""
         query = """
         INSERT INTO proxies 
@@ -55,14 +71,15 @@ class ProxyModel:
         params = (proxy_type, host, port, username, password)
 
         try:
-            proxy_id = self.db.execute_query(query, params)
-            logging.info(f"Added new {proxy_type} proxy {host}:{port}")
-            return proxy_id
+            proxy_id = await self.db.execute_query(query, params)
+            logger.info(f"Added new {proxy_type} proxy {host}:{port}")
+            return proxy_id[0]
         except Exception as e:
-            logging.error(f"Ошибка добавления прокси {host}:{port}: {e}")
+            logger.error(f"Ошибка добавления прокси {host}:{port}: {e}")
             return None
 
-    def get_proxy_by_id(self, proxy_id):
+
+    async def get_proxy_by_id(self, proxy_id):
         """Получает прокси по его id"""
         query = """
         SELECT * FROM proxies
@@ -70,11 +87,12 @@ class ProxyModel:
         """
         params = (proxy_id,)
         try:
-            proxy = self.db.execute_query(query, params)
-            return proxy
+            proxy = await self.db.execute_query(query, params)
+            return proxy[0]
         except Exception as e:
-            logging.error(f"Прокси с id {proxy_id} не найден: {e}")
+            logger.error(f"Прокси с id {proxy_id} не найден: {e}")
             return None
+
 
     def get_all_proxies(self):
         """Получает все прокси"""
@@ -83,8 +101,9 @@ class ProxyModel:
             proxies = self.db.execute_query(query)
             return proxies
         except Exception as e:
-            logging.error(f"Ошибка получения всех прокси: {e}")
-            raise
+            logger.error(f"Ошибка получения всех прокси: {e}")
+            return None
+
 
     def get_available_proxies(self, limit=10):
         """Получает доступные активные прокси в указанном количестве"""
@@ -97,11 +116,11 @@ class ProxyModel:
 
         try:
             proxies = self.db.execute_query(query, (limit,))
-            logging.info(f"Получено {len(proxies)} доступных прокси")
+            logger.info(f"Получено {len(proxies)} доступных прокси")
             return proxies
         except Exception as e:
-            logging.error(f"Ошибка получения доступных прокси: {e}")
-            return []
+            logger.error(f"Ошибка получения доступных прокси: {e}")
+            return None
 
 
     def update_proxy_status(self, proxy_id, is_active):
@@ -116,45 +135,30 @@ class ProxyModel:
         try:
             self.db.execute_query(query, params)
             status = "активен" if is_active else "неактивен"
-            logging.info(f"Статус прокси {proxy_id} обновлен на {status}")
+            logger.info(f"Статус прокси {proxy_id} обновлен на {status}")
             return True
         except Exception as e:
-            logging.error(f"Ошибка обновления статуса прокси {proxy_id} status: {e}")
+            logger.error(f"Ошибка обновления статуса прокси {proxy_id} status: {e}")
             return False
 
-    async def check_proxy(self, proxy):
-        """Проверяет работоспособность прокси"""
-        proxy_dict = self.format_proxy_for_telethon(proxy)
 
-        if not proxy_dict:
-            logging.error(f"Неверный тип прокси: {proxy['type']}")
-            return False
+    async def bulk_update_proxy_statuses(self, proxy_statuses):
+        """Обновляет статусы для нескольких прокси одним запросом"""
+        if not proxy_statuses:
+            return True
+
+        query = """
+        UPDATE proxies
+        SET is_active = %s, last_checked = CURRENT_TIMESTAMP
+        WHERE id = %s
+        """
 
         try:
-            # Создаем временный клиент для проверки прокси
-            client = TelegramClient(
-                StringSession(),
-                api_id=123456,  # Фиктивные значения для проверки
-                api_hash='abcdef1234567890',
-                proxy=proxy_dict
-            )
-
-            # Пытаемся подключиться
-            await client.connect()
-            if client.is_connected():
-                is_connected = True
-                await client.disconnect()
-
-            if is_connected:
-                logging.info(f"Proxy {proxy['id']} ({proxy['host']}:{proxy['port']}) работает")
-                return True
-            else:
-                logging.warning(f"Proxy {proxy['id']} ({proxy['host']}:{proxy['port']}) ошибка подключения")
-                return False
-
+            affected_rows = await self.db.execute_batch_query(query, proxy_statuses)
+            return affected_rows > 0
         except Exception as e:
-            logging.error(f"Ошибка проверки proxy {proxy['id']} ({proxy['host']}:{proxy['port']}): {e}")
             return False
+
 
     def format_proxy_for_telethon(self, proxy):
         """Форматирует прокси для использования в Telethon"""
@@ -179,3 +183,23 @@ class ProxyModel:
             }
 
         return proxy_dict
+
+    async def get_proxies_stats(self):
+        """Получает статистику по прокси-серверам"""
+        try:
+            query = """
+               SELECT
+                   COUNT(*) as total,
+                   SUM(CASE WHEN is_active = TRUE THEN 1 ELSE 0 END) as active,
+                   SUM(CASE WHEN is_active = FALSE THEN 1 ELSE 0 END) as inactive
+               FROM proxies
+               """
+            result = self.db.execute_query(query)[0]
+            return {
+                'total': result['total'],
+                'active': result['active'],
+                'inactive': result['inactive']
+            }
+        except Exception as e:
+            logger.error(f"Ошибка при получении статистики по прокси-серверам: {e}")
+            return None

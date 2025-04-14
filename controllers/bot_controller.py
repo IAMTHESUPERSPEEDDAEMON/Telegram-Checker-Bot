@@ -1,4 +1,3 @@
-import json
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters, ConversationHandler
 from controllers.checker_controller import CheckerController
@@ -7,13 +6,10 @@ from controllers.proxy_controller import ProxyController
 from utils.logger import Logger
 from views.telegram_view import TelegramView
 from utils.csv_handler import CSVHandler
-from config.config import BOT_TOKEN, ADMIN_IDS, TEMP_DIR
-import asyncio
+from config.config import BOT_TOKEN, WAITING_FOR_CODE, WAITING_FOR_PASSWORD
+from utils.admin_checker import is_admin
 
 logger = Logger()
-# Состояния для ConversationHandler
-WAITING_FOR_CODE = 1
-WAITING_FOR_PASSWORD = 2
 class BotController:
     def __init__(self):
         self.checker = CheckerController()
@@ -37,13 +33,13 @@ class BotController:
 
         # Админские команды
         self.app.add_handler(CommandHandler("status", self.status_command))
-        self.app.add_handler(CommandHandler("check_sessions", self.check_sessions_command))
         self.app.add_handler(CommandHandler("update_session", self.update_session_command))
         self.app.add_handler(CommandHandler("delete_session", self.delete_session_command))
+        self.app.add_handler(CommandHandler("check_sessions", self.check_sessions_command))
         self.app.add_handler(CommandHandler("add_proxy", self.add_proxy_command))
-        self.app.add_handler(CommandHandler("check_proxies", self.check_proxies_command))
         self.app.add_handler(CommandHandler("update_proxy", self.update_proxy_command))
         self.app.add_handler(CommandHandler("delete_proxy", self.delete_proxy_command))
+        self.app.add_handler(CommandHandler("check_proxies", self.check_proxies_command))
         self.app.add_handler(CommandHandler("assign_proxys_to_sessions", self.assign_proxys_to_sessions_command))
         # Регистрация обработчика беседы для добавления сессии
         add_session_conv = ConversationHandler(
@@ -64,20 +60,19 @@ class BotController:
 
     async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обрабатывает команду /start"""
-        await self.view.send_welcome_message(update, context)
+        await self.view.send_welcome_message(update)
         # to-do USER CONTROLLER
 
 
     async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обрабатывает команду /help"""
-        await self.view.send_help_message(update, context)
+        await self.view.send_help_message(update)
 
 
     async def status_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обрабатывает команду /status - показывает статус сессий и прокси"""
         # Проверяем, является ли пользователь администратором
-        if update.effective_user.id not in ADMIN_IDS:
-            await self.view.send_access_denied(update, context)
+        if not is_admin(update):
             return
 
         # Получаем статус сессий и прокси
@@ -85,138 +80,57 @@ class BotController:
         proxies_stats = await self.proxy_controller.get_proxies_stats()
 
         # Отправляем статус
-        await self.view.send_status_message(update, context, sessions_stats['message'], proxies_stats)
+        await self.view.send_status_message(update, sessions_stats['message'], proxies_stats['message'])
 
+    """Блок сессий==================================================================================================="""
 
     async def add_session(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обрабатывает команду /add_session - добавляет новую сессию"""
         await self.session_controller.start_add_session(update, context)
+
+
+    async def update_session_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Обновляет данные сессии."""
+        await self.session_controller.update_session_command(update, context)
+
+
+    async def delete_session_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Удаляет сессию по указанному ID"""
+        await self.session_controller.delete_session(update, context)
+
 
     async def check_sessions_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обрабатывает команду /check_sessions - проверяет работоспособность сессий"""
         # Delegation to session controller
         await self.session_controller.check_sessions_command(update, context)
 
-    async def update_session_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Обновляет данные сессии."""
-        await self.session_controller.update_session_command(update, context)
-
-    async def delete_session_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Удаляет сессию по указанному ID"""
-        await self.session_controller.delete_session(update, context)
 
     async def assign_proxys_to_sessions_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Присваивает прокси к сессиям"""
         await self.session_controller.assign_proxies_to_sessions_command(update, context)
 
+    """Блок прокси==================================================================================================="""
 
     async def add_proxy_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обрабатывает команду /add_proxy - добавляет новый прокси"""
-        # Проверяем, является ли пользователь администратором
-        if update.effective_user.id not in ADMIN_IDS:
-            await self.view.send_access_denied(update, context)
-            return
-
-        # Проверяем аргументы команды
-        if not context.args or len(context.args) < 3:
-            await self.view.send_message(
-                update,
-                context,
-                "Использование: /add_proxy <тип> <хост> <порт> [имя пользователя] [пароль]"
-            )
-            return
-
-        proxy_type = context.args[0]
-        host = context.args[1]
-        port = int(context.args[2])
-        username = context.args[3] if len(context.args) > 3 else None
-        password = context.args[4] if len(context.args) > 4 else None
-
-        # Добавляем прокси
-        try:
-            proxy_id = self.proxy_controller.add_proxy(proxy_type, host, port, username, password)
-            await self.view.send_message(
-                update,
-                context,
-                f"Прокси успешно добавлен (ID: {proxy_id})"
-            )
-        except Exception as e:
-            await self.view.send_message(
-                update,
-                context,
-                f"Ошибка при добавлении прокси: {str(e)}"
-            )
-
-
-    async def check_proxies_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Обрабатывает команду /check_proxies - проверяет работоспособность прокси"""
-        # Проверяем, является ли пользователь администратором
-        if update.effective_user.id not in ADMIN_IDS:
-            await self.view.send_access_denied(update, context)
-            return
-
-        await self.view.send_message(update, context, "Начинаем проверку прокси...")
-        results = await self.proxy_controller.check_all_proxies()
-        if results['status'] == 'error':
-            await self.view.send_message(update, context, results['message'])
-            return
-        else:
-            await self.view.send_proxies_check_results(update, context, results)
+        await self.proxy_controller.add_proxy_command(update, context)
 
 
     async def update_proxy_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обновляет данные прокси."""
-        if update.effective_user.id not in ADMIN_IDS:
-            await self.view.send_access_denied(update, context)
-            return
-
-        if not context.args or len(context.args) < 2:
-            await self.view.send_message(
-                update, context,
-                "Использование: /update_proxy <proxy_id> <новые параметры (тип, хост, порт, имя, пароль)>"
-            )
-            return
-
-        proxy_id = int(context.args[0])
-        new_params = context.args[1:]
-
-        success = self.proxy_controller.update_proxy(proxy_id, new_params)
-        await self.view.send_message(update, context, success['message'])
-
-        session_id = int(context.args[0])
-        try:
-            new_params = json.loads(context.args[1])
-        except ValueError:
-            await self.view.send_message(update, context, "Неверный формат параметров.")
-            return
-
-        success = self.session_controller.update_session(session_id, new_params)
-        await self.view.send_message(update, context, success['message'])
+        await self.proxy_controller.update_proxy_command(update, context)
 
 
     async def delete_proxy_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Удаляет прокси по указанному ID"""
-        if update.effective_user.id not in ADMIN_IDS:
-            await self.view.send_access_denied(update, context)
-            return
+        await self.proxy_controller.delete_proxy(update, context)
 
-        if not context.args or len(context.args) < 1:
-            await self.view.send_message(update, context, "Не указан ID прокси для удаления.")
-            return
 
-        proxy_id = int(context.args[0])
-        result = self.proxy_controller.delete_proxy(proxy_id)
-        await self.view.send_message(update, context, result['message'])
+    async def check_proxies_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Обрабатывает команду /check_proxies - проверяет работоспособность прокси"""
+        await self.proxy_controller.check_proxies_command(update, context)
 
-    async def assign_proxys_to_sessions_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Присваивает прокси к сессиям"""
-        if update.effective_user.id not in ADMIN_IDS:
-            await self.view.send_access_denied(update, context)
-            return
-
-        result = await self.session_controller.assign_proxies_to_sessions()
-        await self.view.send_result_message(update, context, result)
-
+    """Блок работы чекера ==========================================================================================="""
 
     async def process_csv(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обрабатывает полученный CSV файл"""
@@ -228,7 +142,6 @@ class BotController:
         # Сообщаем пользователю, что начинаем обработку
         await self.view.send_message(
             update,
-            context,
             f"Начинаю обработку файла {file_name}. Это может занять некоторое время..."
         )
 
@@ -243,7 +156,6 @@ class BotController:
             # Обрабатываем файл и проверяем номера
             processing_message = await self.view.send_message(
                 update,
-                context,
                 "Проверяю номера из файла на наличие в Telegram..."
             )
 
@@ -252,7 +164,7 @@ class BotController:
 
             if result:
                 # Отправляем результаты пользователю
-                await self.view.send_check_results(update, context, result)
+                await self.view.send_check_results(update, result)
 
                 # Отправляем файл с результатами
                 await self.view.send_document(
@@ -264,7 +176,6 @@ class BotController:
             else:
                 await self.view.send_message(
                     update,
-                    context,
                     "Не удалось найти номера с Telegram в вашем файле или произошла ошибка при обработке."
                 )
 
@@ -272,7 +183,6 @@ class BotController:
             logger.error(f"Ошибка при обработке файла: {e}")
             await self.view.send_message(
                 update,
-                context,
                 f"Произошла ошибка при обработке файла: {str(e)}"
             )
 

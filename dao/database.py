@@ -18,7 +18,7 @@ class DatabaseManager:
         try:
             self.pool = pooling.MySQLConnectionPool(
                 pool_name="telegram_checker_pool",
-                pool_size=100,
+                pool_size=15,
                 pool_reset_session=True,
                 **DB_CONFIG
             )

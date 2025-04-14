@@ -9,12 +9,12 @@ class TelegramView:
     """
 
     # Статические методы для сообщений с фиксированным текстом
-    async def send_welcome_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    async def send_welcome_message(self, update: Update):
         """Отправляет приветственное сообщение пользователю"""
         message = "Привет! Я бот для проверки номеров в Telegram. Используйте /help для просмотра команд."
         await update.message.reply_text(message)
 
-    async def send_help_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    async def send_help_message(self, update: Update):
         """Отправляет справочное сообщение"""
         message = ("Доступные команды:\n"
                    "/start - Запуск бота\n"
@@ -26,16 +26,17 @@ class TelegramView:
                    "/delete_session - Удалить сессию\n")
         await update.message.reply_text(message)
 
-    async def send_access_denied(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    @staticmethod
+    async def send_access_denied(update: Update):
         """Отправляет сообщение об отказе в доступе"""
         await update.message.reply_text("⛔ У вас нет прав для выполнения этой команды.")
 
     # Методы для динамического контента
-    async def send_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE, message: str):
+    async def send_message(self, update: Update, message: str):
         """Отправляет обычное текстовое сообщение"""
         await update.message.reply_text(message)
 
-    async def send_result_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE, result: dict):
+    async def send_result_message(self, update: Update, result: dict):
         """
         Отправляет результат операции на основе словаря с ключами status и message
         """
@@ -44,13 +45,13 @@ class TelegramView:
         else:
             await update.message.reply_text(f"❌ Ошибка: {result['message']}")
 
-    async def send_status_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE, sessions_status: str,
+    async def send_status_message(self, update: Update, sessions_status: str,
                                   proxies_status: str):
         """Отправляет сообщение со статусом сессий и прокси"""
         message = f"Статус сессий: {sessions_status}\nСтатус прокси: {proxies_status}"
         await update.message.reply_text(message)
 
-    async def send_check_results(self, update: Update, context: ContextTypes.DEFAULT_TYPE, result: dict):
+    async def send_check_results(self, update: Update, result: dict):
         """Отправляет результаты проверки номеров"""
         message = f"Найдено {result['telegram_found']} номеров с Telegram из {result['total_checked']}"
         await update.message.reply_text(message)

@@ -44,10 +44,6 @@ class SessionModel:
             fields.append("proxy_id = %s")
             params.append(proxy_id)
 
-        if not fields:
-            logger.warning(f"No fields to update for session {session_id}")
-            return False  # або True, якщо ти хочеш просто проігнорувати
-
         query = f"""
                     UPDATE telegram_sessions 
                     SET {', '.join(fields)}
@@ -61,6 +57,7 @@ class SessionModel:
         except Exception as e:
             logger.error(f"Error updating session {session_id}: {e}")
             return False
+
 
     async def add_session_to_db(self, session_data_list):
         """Добавляет новую сессию в базу данных"""
@@ -76,11 +73,11 @@ class SessionModel:
         """
         params = (phone, api_id, api_hash, string_session)
 
-        self.db.execute_query(query, params)
-
-        # Получение последнего вставленного id
-        last_inserted_id_query = f"SELECT id FROM telegram_sessions WHERE phone='{phone}'"
-        result = self.db.execute_query(last_inserted_id_query)
+        result = self.db.execute_query(query, params)
+        #
+        # # Получение последнего вставленного id
+        # last_inserted_id_query = f"SELECT id FROM telegram_sessions WHERE phone='{phone}'"
+        # result = self.db.execute_query(last_inserted_id_query)
         logger.info(f'Успех! id Добавленной сессии для телефона {phone}: {result[0]}')
         return result[0]
 

@@ -1,49 +1,43 @@
 import asyncio
 import json
-
 from telegram import Update
 from telegram.ext import ContextTypes, ConversationHandler
-from controllers.bot_controller import WAITING_FOR_CODE, WAITING_FOR_PASSWORD
-from models.proxy_model import ProxyModel
+from config.config import WAITING_FOR_CODE, WAITING_FOR_PASSWORD
 from services.session_service import SessionService
 from utils.logger import Logger
 from views.telegram_view import TelegramView
-import utils
+from utils.admin_checker import is_admin
 
 logger = Logger()
-
 # Словарь для хранения данных сессии во время создания
 session_data = {}
 class SessionController:
     def __init__(self):
         self.session_service = SessionService()
-        self.proxy_model = ProxyModel()
         self.view = TelegramView()
-        self.is_admin = utils.admin_checker.is_admin
 
     async def delete_session(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Удаляет сессию из базы данных"""
-        if not await self.is_admin(update, context):
+        if not await is_admin(update):
             return
 
         if not context.args or len(context.args) < 1:
-            await self.view.send_message(update, context, "Не указан ID сессии для удаления.")
+            await self.view.send_message(update, "Не указан ID сессии для удаления.")
             return
 
         session_id = int(context.args[0])
-        await self.view.send_result_message(update, context, await self.session_service.delete_session(session_id))
+        await self.view.send_result_message(update, await self.session_service.delete_session(session_id))
 
 
     async def start_add_session(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Начинает процесс добавления сессии"""
-        if not await self.is_admin(update, context):
+        if not await is_admin(update):
             return
 
         # Проверяем аргументы команды
         if not context.args or len(context.args) < 3:
             await self.view.send_message(
                 update,
-                context,
                 "Использование: /add_session <телефон> <api_id> <api_hash> [proxy_id]"
             )
             return ConversationHandler.END
@@ -68,7 +62,6 @@ class SessionController:
         # Сообщаем пользователю, что процесс начат
         await self.view.send_message(
             update,
-            context,
             f"Начинаем создание сессии для номера {phone}. Ожидайте запрос кода..."
         )
 
@@ -111,7 +104,7 @@ class SessionController:
         )
 
         # Отправляем результат пользователю
-        await self.view.send_result_message(update, context, result)
+        await self.view.send_result_message(update, result)
 
         # Завершаем диалог
         return ConversationHandler.END
@@ -128,7 +121,6 @@ class SessionController:
 
             await self.view.send_message(
                 update,
-                context,
                 f"✅ Код получен: {code}. Выполняется вход..."
             )
 
@@ -138,7 +130,6 @@ class SessionController:
         else:
             await self.view.send_message(
                 update,
-                context,
                 "❌ Что-то пошло не так. Пожалуйста, начните процесс заново с команды /add_session"
             )
             return ConversationHandler.END
@@ -158,7 +149,6 @@ class SessionController:
 
             await self.view.send_message(
                 update,
-                context,
                 "✅ Пароль получен. Выполняется вход..."
             )
 
@@ -167,7 +157,6 @@ class SessionController:
         else:
             await self.view.send_message(
                 update,
-                context,
                 "❌ Что-то пошло не так. Пожалуйста, начните процесс заново с команды /add_session"
             )
             return ConversationHandler.END
@@ -189,7 +178,6 @@ class SessionController:
 
         await self.view.send_message(
             update,
-            context,
             "🚫 Процесс добавления сессии отменен."
         )
 
@@ -198,33 +186,37 @@ class SessionController:
     async def check_sessions_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обрабатывает команду /check_sessions - проверяет работоспособность сессий"""
         # Проверяем, является ли пользователь администратором
-        if not self.is_admin(update, context):
+        if not is_admin(update):
             return
 
-        await self.view.send_message(update, context, "Начинаем проверку сессий...")
-        await self.view.send_result_message(update, context, await self.session_service.check_all_sessions())
-
+        await self.view.send_message(update, "Начинаем проверку сессий...")
+        await self.view.send_result_message(update, await self.session_service.check_all_sessions())
 
 
     async def update_session_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обновляет данные сессии."""
-        if not self.is_admin(update, context):
+        if not is_admin(update):
             return
 
         if not context.args or len(context.args) < 2:
             await self.view.send_message(
-                update, context,
+                update,
                 "Использование: /update_session <session_id> <новые параметры в формате JSON>"
             )
             return
 
         session_id = int(context.args[0])
         result = await self.session_service.update_session(session_id, json.loads(''.join(context.args[1:])))
-        await self.view.send_result_message(update, context, result)
+        await self.view.send_result_message(update, result)
 
 
-    async def assign_proxies_to_sessions_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE()):
+    async def assign_proxies_to_sessions_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Присваивает прокси к сессиям."""
-        if not self.is_admin(update, context):
+        if not is_admin(update):
             return
-        await self.view.send_result_message(update, context, await self.session_service.assign_proxies_to_sessions())
+        await self.view.send_result_message(update, await self.session_service.assign_proxies_to_sessions())
+
+
+    async def get_sessions_stats(self):
+        """Получить статистику по сессиям"""
+        return await self.session_service.get_sessions_stats()

@@ -1,66 +1,75 @@
-import logging
-from models.proxy_model import ProxyModel
+from telegram import Update
+from telegram.ext import ContextTypes
+
+from services.proxy_service import ProxyService
+from views.telegram_view import TelegramView
+from utils.admin_checker import is_admin
 
 class ProxyController:
     def __init__(self):
-        self.proxy_model = ProxyModel()
+        self.proxy_service = ProxyService()
+        self.view = TelegramView()
+
+    async def delete_proxy(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Удаляет прокси из базы данных"""
+        if not await is_admin(update):
+            return
+
+        # Проверяем аргументы команды
+        if not context.args or len(context.args) < 1:
+            await self.view.send_message(update, "Не указан ID прокси для удаления.")
+            return
+
+        proxy_id = int(context.args[0])
+        await self.view.send_result_message(update, result=await self.proxy_service.delete_by_id(proxy_id))
+
+
+    async def add_proxy_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Добавляет новый прокси в базу данных"""
+        if not await is_admin(update):
+            return
+
+        if not context.args or len(context.args) < 3:
+            await self.view.send_message(
+                update,
+                "Использование: /add_proxy <тип> <хост> <порт> [имя пользователя] [пароль]"
+            )
+            return
+
+        proxy_type = context.args[0]
+        host = context.args[1]
+        port = int(context.args[2])
+        username = context.args[3] if len(context.args) > 3 else None
+        password = context.args[4] if len(context.args) > 4 else None
+
+        await self.view.send_result_message(update, await self.proxy_service.add_proxy(proxy_type, host, port, username, password))
+
+
+    async def update_proxy_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Обновляет данные прокси."""
+        if not await is_admin(update):
+            return
+
+        if not context.args or len(context.args) < 4:
+            await self.view.send_message(
+                update,
+                "Использование: /update_proxy <proxy_id> <тип> <хост> <порт> [имя пользователя] [пароль]"
+            )
+            return
+
+        proxy_id = int(context.args[0])
+        await self.view.send_result_message(update, await self.proxy_service.update_proxy(proxy_id, context.args))
+
+
+    async def check_proxies_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Обрабатывает команду /check_proxies - проверяет работоспособность прокси"""
+        # Проверяем, является ли пользователь администратором
+        if not await is_admin(update):
+            return
+
+        await self.view.send_message(update, "Начинаем проверку прокси...")
+        await self.view.send_result_message(update, await self.proxy_service.check_all_proxies())
 
     async def get_proxies_stats(self):
-        """Получает статистику по прокси-серверам"""
-        try:
-            query = """
-               SELECT
-                   COUNT(*) as total,
-                   SUM(CASE WHEN is_active = TRUE THEN 1 ELSE 0 END) as active,
-                   SUM(CASE WHEN is_active = FALSE THEN 1 ELSE 0 END) as inactive
-               FROM proxies
-               """
-            result = self.proxy_model.db.execute_query(query)[0]
-            return {
-                'total': result['total'],
-                'active': result['active'],
-                'inactive': result['inactive']
-            }
-        except Exception as e:
-            logging.error(f"Ошибка при получении статистики по прокси-серверам: {e}")
-            raise
-
-    def add_proxy(self, proxy_type, host, port, username=None, password=None):
-        """Добавляет новый прокси в базу данных"""
-        proxy_id = self.proxy_model.add_proxy(proxy_type, host, port, username, password)
-        if proxy_id is not None:
-            return {'status': 'success', 'message': f'Прокси {host}:{port} успешно добавлен.', 'proxy_id': proxy_id}
-        else:
-            return {'status': 'error', 'message': f'Прокси {host}:{port} не удалось добавить.'}
-
-    def delete_proxy(self, proxy_id):
-        """Удаляет прокси из базы данных"""
-        if self.proxy_model.get_proxy_by_id(proxy_id) is not None:
-            result = self.proxy_model.delete_proxy(proxy_id)
-            if result:
-                return {'status': 'success', 'message': f'Прокси с ID {proxy_id} успешно удален.'}
-            else:
-                return {'status': 'error', 'message': f'Прокси с ID {proxy_id} не удалось удалить.'}
-        else:
-            return {'status': 'error', 'message': f'Прокси с ID {proxy_id} не существует.'}
-
-    def update_proxy(self, proxy_id, new_host=None, new_port=None, new_username=None, new_password=None):
-        """Обновляет данные прокси в базе данных"""
-        result = self.proxy_model.update_proxy(proxy_id, new_host, new_port, new_username, new_password)
-        if result:
-            return {'status': 'success', 'message': f'Прокси с ID {proxy_id} успешно обновлен.'}
-        else:
-            return {'status': 'error', 'message': f'Прокси с ID {proxy_id} не удалось обновить.'}
-
-    async def check_all_proxies(self):
-        """Проверяет все прокси в базе данных"""
-        proxies = await self.proxy_model.get_all_proxies()
-
-        try:
-            for proxy in proxies:
-                is_working = await self.proxy_model.check_proxy(proxy)
-                self.proxy_model.update_proxy_status(proxy['id'], is_working)
-            return await self.proxy_model.get_all_proxies()
-        except Exception as e:
-            logging.error(f"Ошибка при проверке всех прокси: {e}")
-            return {'status': 'error', 'message': "Произошла ошибка при проверке всех проксей"}
+        """Получет стату по прокси"""
+        return await self.proxy_service.get_proxies_stats()
