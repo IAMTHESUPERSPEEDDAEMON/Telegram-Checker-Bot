@@ -3,6 +3,7 @@ from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, Messa
 from controllers.checker_controller import CheckerController
 from controllers.session_controller import SessionController
 from controllers.proxy_controller import ProxyController
+from controllers.user_controller import UserController
 from utils.logger import Logger
 from views.telegram_view import TelegramView
 from utils.csv_handler import CSVHandler
@@ -15,6 +16,7 @@ class BotController:
         self.checker = CheckerController()
         self.session_controller = SessionController()
         self.proxy_controller = ProxyController()
+        self.user_controller = UserController()
         self.view = TelegramView()
         self.csv_handler = CSVHandler()
 
@@ -28,7 +30,7 @@ class BotController:
     def _register_handlers(self):
         """Регистрирует обработчики команд и сообщений"""
         # Команды
-        self.app.add_handler(CommandHandler("start", self.start_command))
+        self.app.add_handler(CommandHandler("start", self.user_controller.start_command))
         self.app.add_handler(CommandHandler("help", self.help_command))
 
         # Админские команды
@@ -37,10 +39,10 @@ class BotController:
         self.app.add_handler(CommandHandler("delete_session", self.session_controller.delete_session_command))
         self.app.add_handler(CommandHandler("check_sessions", self.session_controller.check_sessions_command))
         self.app.add_handler(CommandHandler("assign_proxys_to_sessions", self.session_controller.assign_proxies_to_sessions_command))
-        self.app.add_handler(CommandHandler("add_proxy", self.add_proxy_command))
-        self.app.add_handler(CommandHandler("update_proxy", self.update_proxy_command))
-        self.app.add_handler(CommandHandler("delete_proxy", self.delete_proxy_command))
-        self.app.add_handler(CommandHandler("check_proxies", self.check_proxies_command))
+        self.app.add_handler(CommandHandler("add_proxy", self.proxy_controller.add_proxy_command))
+        self.app.add_handler(CommandHandler("update_proxy", self.proxy_controller.update_proxy_command))
+        self.app.add_handler(CommandHandler("delete_proxy", self.proxy_controller.delete_proxy_command))
+        self.app.add_handler(CommandHandler("check_proxies", self.proxy_controller.check_proxies_command))
         # Регистрация обработчика беседы для добавления сессии
         add_session_conv = ConversationHandler(
             entry_points=[CommandHandler('add_session', self.session_controller.start_add_session)],
@@ -57,11 +59,6 @@ class BotController:
         # Файлы
         self.app.add_handler(MessageHandler(filters.Document.FileExtension('csv'), self.process_csv))
 
-
-    async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Обрабатывает команду /start"""
-        await self.view.send_welcome_message(update)
-        # to-do USER CONTROLLER
 
 
     async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -81,28 +78,6 @@ class BotController:
 
         # Отправляем статус
         await self.view.send_status_message(update, sessions_stats['message'], proxies_stats['message'])
-
-
-    """Блок прокси==================================================================================================="""
-
-    async def add_proxy_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Обрабатывает команду /add_proxy - добавляет новый прокси"""
-        await self.proxy_controller.add_proxy_command(update, context)
-
-
-    async def update_proxy_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Обновляет данные прокси."""
-        await self.proxy_controller.update_proxy_command(update, context)
-
-
-    async def delete_proxy_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Удаляет прокси по указанному ID"""
-        await self.proxy_controller.delete_proxy(update, context)
-
-
-    async def check_proxies_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Обрабатывает команду /check_proxies - проверяет работоспособность прокси"""
-        await self.proxy_controller.check_proxies_command(update)
 
     """Блок работы чекера ==========================================================================================="""
 

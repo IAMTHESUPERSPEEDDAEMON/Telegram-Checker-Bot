@@ -199,6 +199,7 @@ class SessionController:
         await self.view.send_result_message(update, await self.session_service.check_all_sessions())
 
 
+#TODO: подумать над применением
     async def update_session_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обновляет данные сессии."""
         if not await is_admin(update):

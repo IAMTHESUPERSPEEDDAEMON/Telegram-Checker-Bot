@@ -36,6 +36,8 @@ class DatabaseManager:
                 telegram_id BIGINT UNIQUE NOT NULL,
                 username VARCHAR(255),
                 is_admin BOOLEAN DEFAULT FALSE,
+                has_paid BOOLEAN DEFAULT FALSE,
+                paid_until TIMESTAMP,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
             """,

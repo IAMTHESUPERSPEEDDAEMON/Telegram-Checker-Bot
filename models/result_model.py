@@ -1,12 +1,12 @@
-import logging
 import os
 import csv
 import time
 
+from utils.logger import Logger
 from dao.database import DatabaseManager
 from config.config import TEMP_DIR
 
-
+logger = Logger()
 class ResultModel:
     def __init__(self):
         self.db = DatabaseManager()
