@@ -2,6 +2,8 @@ from dao.database import DatabaseManager
 from utils.logger import Logger
 
 logger = Logger()
+
+
 class ProxyModel:
     def __init__(self):
         self.db = DatabaseManager()
@@ -21,7 +23,6 @@ class ProxyModel:
         except Exception as e:
             logger.error(f"Ошибка при удалении прокси {proxy_id}: {e}")
             return False
-
 
     async def update_proxy(self, proxy_id, proxy_type=None, host=None, port=None, username=None, password=None):
         """Обновляет детали прокси"""
@@ -59,7 +60,6 @@ class ProxyModel:
             logger.error(f"Ошибка при обновлении прокси {proxy_id} детали: {e}")
             return False
 
-
     async def add_proxy(self, proxy_type, host, port, username, password):
         """Добавляет новый прокси в базу данных"""
         query = """
@@ -77,7 +77,6 @@ class ProxyModel:
             logger.error(f"Ошибка добавления прокси {host}:{port}: {e}")
             return None
 
-
     async def get_proxy_by_id(self, proxy_id):
         """Получает прокси по его id"""
         query = """
@@ -92,7 +91,6 @@ class ProxyModel:
             logger.error(f"Прокси с id {proxy_id} не найден: {e}")
             return None
 
-
     async def get_all_proxies(self):
         """Получает все прокси"""
         query = "SELECT * FROM proxies"
@@ -102,7 +100,6 @@ class ProxyModel:
         except Exception as e:
             logger.error(f"Ошибка получения всех прокси: {e}")
             return None
-
 
     async def get_available_proxies(self, limit=10):
         """Получает доступные активные прокси в указанном количестве"""
@@ -122,7 +119,6 @@ class ProxyModel:
             logger.error(f"Ошибка получения доступных прокси: {e}")
             return None
 
-
     def update_proxy_status(self, proxy_id, is_active):
         """Обновляет статус прокси"""
         query = """
@@ -141,7 +137,6 @@ class ProxyModel:
             logger.error(f"Ошибка обновления статуса прокси {proxy_id} status: {e}")
             return False
 
-
     async def bulk_update_proxy_statuses(self, proxy_statuses):
         """Обновляет статусы для нескольких прокси одним запросом"""
         if not proxy_statuses:
@@ -158,7 +153,6 @@ class ProxyModel:
             return affected_rows > 0
         except Exception as e:
             return False
-
 
     async def format_proxy_for_telethon(self, proxy):
         """Форматирует прокси для использования в Telethon"""

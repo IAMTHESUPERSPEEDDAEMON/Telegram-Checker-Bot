@@ -10,7 +10,6 @@ class UserController:
         self.user_service = UserService()
         self.view = TelegramView()
 
-
     async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обрабатывает команду /start"""
         await self.user_service.add_user(update.effective_user.id, update.effective_user.username)

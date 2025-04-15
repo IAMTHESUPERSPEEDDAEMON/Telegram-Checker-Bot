@@ -7,54 +7,48 @@ from dao.database import DatabaseManager
 from config.config import TEMP_DIR
 
 logger = Logger()
-class ResultModel:
+
+
+class CheckerModel:
     def __init__(self):
         self.db = DatabaseManager()
 
-    def save_check_result(self, phone, full_name, telegram_id=None, username=None, user_id=None, batch_id=None, retries=3, delay=2):
+    async def bulk_save_check_result(self, check_results):
         """Сохраняет результат проверки в базу данных"""
+        if not check_results:
+            return True
+
         query = """
         INSERT INTO check_results 
         (phone, full_name, telegram_id, username, has_telegram, user_id) 
         VALUES (%s, %s, %s, %s, %s, %s)
         """
-        has_telegram = telegram_id is not None or username is not None
-        params = (phone, full_name, telegram_id, username, has_telegram, user_id)
 
-        for attempt in range(1, retries + 1):
-            try:
-                result_id = self.db.execute_query(query, params)
+        try:
+            affected_rows = self.db.execute_batch_query(query, check_results)
+            logger.info(f"Кол-во строк записано в таблицу check_results: {affected_rows}")
+            return affected_rows > 0
+        except Exception as e:
+            logger.error(f"Была получена ошибка при выполнении batch-запроса в бд: {e}")
+            return False
 
-                # Обновляем счетчик в batch если указан batch_id
-                if batch_id and has_telegram:
-                    self.increment_batch_counter(batch_id, has_telegram)
-
-                return result_id
-            except Exception as e:
-                logging.error(f"[Попытка {attempt}] Ошибка сохранения check_result для {phone}: {e}")
-                if attempt < retries:
-                    logging.info(f"Повтор через {delay} сек...")
-                    time.sleep(delay)  # Ждем перед новой попыткой
-                else:
-                    logging.error("Достигнуто максимальное число попыток. Операция не выполнена.")
-                    return None  # Возвращаем None вместо остановки программы
-
-    def get_results_by_user(self, user_id, limit=100):
+    async def get_results_by_user_paginated(self, user_id, batch_id, offset=0, limit=1000):
         """Получает результаты проверки для конкретного пользователя"""
         query = """
         SELECT * FROM check_results 
-        WHERE user_id = %s AND has_telegram = TRUE
+        WHERE user_id = %s AND has_telegram = TRUE AND batch_id = %s
         ORDER BY checked_at DESC
-        LIMIT %s
+        LIMIT %s OFFSET %s
         """
 
         try:
-            results = self.db.execute_query(query, (user_id, limit))
+            results = self.db.execute_query(query, (user_id, batch_id, limit, offset))
             return results
         except Exception as e:
-            logging.error(f"Error getting results for user {user_id}: {e}")
+            logger.error(f"Error getting results for user {user_id}: {e}")
+            return None
 
-    def create_batch(self, user_id, original_filename, total_numbers):
+    async def create_batch(self, user_id, original_filename, total_numbers):
         """Создает новую запись о пакете проверок"""
         query = """
         INSERT INTO check_batches 
@@ -65,31 +59,38 @@ class ResultModel:
 
         try:
             batch_id = self.db.execute_query(query, params)
-            logging.info(f"Created new batch {batch_id} for user {user_id}")
+            logger.info(f"Created new batch {batch_id} for user {user_id}")
             return batch_id
         except Exception as e:
-            logging.error(f"Error creating batch for user {user_id}: {e}")
+            logger.error(f"Error creating batch for user {user_id}: {e}")
             raise
 
-    def update_batch_status(self, batch_id, status, result_filename=None):
+    async def update_batch_status(self, batch_id, status, result_filename=None):
         """Обновляет статус пакета проверок"""
-        query = """
-        UPDATE check_batches
-        SET status = %s, 
-            result_filename = COALESCE(%s, result_filename),
-            completed_at = CASE WHEN %s IN ('completed', 'failed') THEN CURRENT_TIMESTAMP ELSE NULL END
-        WHERE id = %s
-        """
-        params = (status, result_filename, status, batch_id)
-
         try:
+            fields = ['status = %s']
+            params = [status]
+
+            if result_filename is not None:
+                fields.append('result_filename = %s')
+                params.append(result_filename)
+
+            # Если статус завершённый — добавляем дату
+            if status in ('completed', 'failed'):
+                fields.append('completed_at = CURRENT_TIMESTAMP')
+
+            # Собираем финальный запрос
+            set_clause = ', '.join(fields)
+            query = f"UPDATE check_batches SET {set_clause} WHERE id = %s"
+            params.append(batch_id)
+
             self.db.execute_query(query, params)
-            logging.info(f"Updated batch {batch_id} status to {status}")
+            logger.info(f"Updated batch {batch_id} status to {status}")
         except Exception as e:
-            logging.error(f"Error updating batch {batch_id} status: {e}")
+            logger.error(f"Error updating batch {batch_id} status: {e}")
             raise
 
-    def increment_batch_counter(self, batch_id, has_telegram=False):
+    async def increment_batch_counter(self, batch_id, has_telegram=False):
         """Увеличивает счетчик обработанных номеров и найденных номеров с Telegram"""
         query = """
         UPDATE check_batches
@@ -103,10 +104,10 @@ class ResultModel:
         try:
             self.db.execute_query(query, params)
         except Exception as e:
-            logging.error(f"Error incrementing counters for batch {batch_id}: {e}")
+            logger.error(f"Error incrementing counters for batch {batch_id}: {e}")
             raise
 
-    def get_batch_by_id(self, batch_id):
+    async def get_batch_by_id(self, batch_id):
         """Получает информацию о пакете проверок по ID"""
         query = "SELECT * FROM check_batches WHERE id = %s"
 
@@ -114,10 +115,10 @@ class ResultModel:
             batches = self.db.execute_query(query, (batch_id,))
             return batches[0] if batches else None
         except Exception as e:
-            logging.error(f"Error getting batch {batch_id}: {e}")
+            logger.error(f"Error getting batch {batch_id}: {e}")
             raise
 
-    def get_batch_results(self, batch_id):
+    async def get_batch_results(self, batch_id):
         """Получает все результаты для конкретного пакета проверок"""
         query = """
         SELECT r.* FROM check_results r
@@ -130,19 +131,19 @@ class ResultModel:
             results = self.db.execute_query(query, (batch_id,))
             return results
         except Exception as e:
-            logging.error(f"Error getting results for batch {batch_id}: {e}")
+            logger.error(f"Error getting results for batch {batch_id}: {e}")
             raise
 
-    def export_results_to_csv(self, batch_id, original_data):
+    async def export_results_to_csv(self, batch_id, original_data):
         """Экспортирует результаты проверки в CSV файл"""
         batch = self.get_batch_by_id(batch_id)
         if not batch:
-            logging.error(f"Batch {batch_id} not found")
+            logger.error(f"Batch {batch_id} not found")
             return None
 
         results = self.get_batch_results(batch_id)
         if not results:
-            logging.warning(f"No results found for batch {batch_id}")
+            logger.warning(f"No results found for batch {batch_id}")
             return None
 
         # Создаем словарь телефон -> результат для быстрого поиска
@@ -167,6 +168,6 @@ class ResultModel:
                     writer.writerow(row)
 
         # Обновляем запись о пакете
-        self.update_batch_status(batch_id, 'completed', output_filename)
+        await self.update_batch_status(batch_id, 'completed', output_filename)
 
         return output_path

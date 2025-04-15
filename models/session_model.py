@@ -6,6 +6,8 @@ from telethon.sessions import StringSession
 from utils.logger import Logger
 
 logger = Logger()
+
+
 class SessionModel:
     def __init__(self):
         self.db = DatabaseManager()
@@ -58,14 +60,13 @@ class SessionModel:
             logger.error(f"Error updating session {session_id}: {e}")
             return False
 
-
     async def add_session_to_db(self, session_data_list):
         """Добавляет новую сессию в базу данных"""
         phone = session_data_list[0]
         api_id = session_data_list[1]
         api_hash = session_data_list[2]
         string_session = session_data_list[3]
-            # Записываем информацию в базу данных
+        # Записываем информацию в базу данных
         query = """
         INSERT INTO telegram_sessions 
         (phone, api_id, api_hash, session_file) 

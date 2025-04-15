@@ -2,6 +2,8 @@ from dao.database import DatabaseManager
 from utils.logger import Logger
 
 logger = Logger()
+
+
 class UserModel:
     def __init__(self):
         self.db = DatabaseManager()
@@ -20,7 +22,6 @@ class UserModel:
         except Exception as e:
             logger.error(f"Ошибка добавления юзера в бд: {e}")
             return None
-
 
     async def update_user(self, telegram_id, username=None, is_admin=False, paid_status=False, paid_until=None):
         """Обновляет данные юзера"""
@@ -54,7 +55,6 @@ class UserModel:
             logger.error(f"Ошибка при обновлении юзера {telegram_id} детали: {e}")
             return False
 
-
     async def delete_user(self, telegram_id):
         """Удаляет пользователя из базы данных"""
         query = f"""DELETE FROM users WHERE telegram_id = %s;"""
@@ -67,7 +67,6 @@ class UserModel:
         except Exception as e:
             logger.error(f"Ошибка при удалении юзера {telegram_id} детали: {e}")
             return False
-
 
     async def get_user_by_telegram_id(self, telegram_id):
         """Возвращает пользователя по его telegram_id"""

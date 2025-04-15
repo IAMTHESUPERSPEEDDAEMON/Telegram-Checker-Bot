@@ -11,6 +11,8 @@ from config.config import BOT_TOKEN, WAITING_FOR_CODE, WAITING_FOR_PASSWORD
 from utils.admin_checker import is_admin
 
 logger = Logger()
+
+
 class BotController:
     def __init__(self):
         self.checker = CheckerController()
@@ -26,7 +28,6 @@ class BotController:
         # Регистрируем обработчики
         self._register_handlers()
 
-
     def _register_handlers(self):
         """Регистрирует обработчики команд и сообщений"""
         # Команды
@@ -38,7 +39,8 @@ class BotController:
         self.app.add_handler(CommandHandler("update_session", self.session_controller.update_session_command))
         self.app.add_handler(CommandHandler("delete_session", self.session_controller.delete_session_command))
         self.app.add_handler(CommandHandler("check_sessions", self.session_controller.check_sessions_command))
-        self.app.add_handler(CommandHandler("assign_proxys_to_sessions", self.session_controller.assign_proxies_to_sessions_command))
+        self.app.add_handler(
+            CommandHandler("assign_proxys_to_sessions", self.session_controller.assign_proxies_to_sessions_command))
         self.app.add_handler(CommandHandler("add_proxy", self.proxy_controller.add_proxy_command))
         self.app.add_handler(CommandHandler("update_proxy", self.proxy_controller.update_proxy_command))
         self.app.add_handler(CommandHandler("delete_proxy", self.proxy_controller.delete_proxy_command))
@@ -59,12 +61,9 @@ class BotController:
         # Файлы
         self.app.add_handler(MessageHandler(filters.Document.FileExtension('csv'), self.process_csv))
 
-
-
     async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обрабатывает команду /help"""
         await self.view.send_help_message(update)
-
 
     async def status_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обрабатывает команду /status - показывает статус сессий и прокси"""

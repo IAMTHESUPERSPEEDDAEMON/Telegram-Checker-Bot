@@ -75,9 +75,10 @@ class DatabaseManager:
                 full_name VARCHAR(255),
                 telegram_id BIGINT,
                 username VARCHAR(255),
-                has_telegram BOOLEAN DEFAULT TRUE,
+                has_telegram BOOLEAN DEFAULT FALSE,
                 user_id INT NOT NULL,
                 checked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                FOREIGN KEY (batch_id) REFERENCES check_batches(id) ON DELETE CASCADE;
             )
             """,
             """
@@ -185,7 +186,7 @@ class DatabaseManager:
 
     def execute_transaction(self, queries_with_params):
         """
-        Выполняет несколько запросов в одной транзакции.
+        Выполняет несколько разных запросов в одной транзакции.
 
         Args:
             queries_with_params: Список кортежей (query, params)

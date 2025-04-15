@@ -23,7 +23,6 @@ class ProxyController:
         proxy_id = int(context.args[0])
         await self.view.send_result_message(update, result=await self.proxy_service.delete_by_id(proxy_id))
 
-
     async def add_proxy_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Добавляет новый прокси в базу данных"""
         if not await is_admin(update):
@@ -44,7 +43,6 @@ class ProxyController:
 
         await self.view.send_result_message(update, await self.proxy_service.add_proxy(proxy_type, host, port, username, password))
 
-
     async def update_proxy_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обновляет данные прокси."""
         if not await is_admin(update):
@@ -59,7 +57,6 @@ class ProxyController:
 
         proxy_id = int(context.args[0])
         await self.view.send_result_message(update, await self.proxy_service.update_proxy(proxy_id, context.args))
-
 
     async def check_proxies_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обрабатывает команду /check_proxies - проверяет работоспособность прокси"""

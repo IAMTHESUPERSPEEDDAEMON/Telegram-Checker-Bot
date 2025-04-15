@@ -11,6 +11,8 @@ from utils.admin_checker import is_admin
 logger = Logger()
 # Словарь для хранения данных сессии во время создания
 session_data = {}
+
+
 class SessionController:
     def __init__(self):
         self.session_service = SessionService()
@@ -27,7 +29,6 @@ class SessionController:
 
         session_id = int(context.args[0])
         await self.view.send_result_message(update, await self.session_service.delete_session_by_id(session_id))
-
 
     async def start_add_session(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Начинает процесс добавления сессии"""
@@ -66,7 +67,6 @@ class SessionController:
         )
 
         return WAITING_FOR_CODE
-
 
     async def create_session_async(self, user_id, update, context):
         """Запускает процесс создания сессии асинхронно"""
@@ -198,8 +198,7 @@ class SessionController:
         await self.view.send_message(update, "Начинаем проверку сессий...")
         await self.view.send_result_message(update, await self.session_service.check_all_sessions())
 
-
-#TODO: подумать над применением
+    #TODO: подумать над применением
     async def update_session_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обновляет данные сессии."""
         if not await is_admin(update):
@@ -216,13 +215,11 @@ class SessionController:
         result = await self.session_service.update_session(session_id, json.loads(''.join(context.args[1:])))
         await self.view.send_result_message(update, result)
 
-
     async def assign_proxies_to_sessions_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Присваивает прокси к сессиям."""
         if not await is_admin(update):
             return
         await self.view.send_result_message(update, await self.session_service.assign_proxies_to_sessions())
-
 
     async def get_sessions_stats(self):
         """Получить статистику по сессиям"""

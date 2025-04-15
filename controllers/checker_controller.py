@@ -8,7 +8,7 @@ import random
 import string
 from models.session_model import SessionModel
 from models.proxy_model import ProxyModel
-from models.result_model import ResultModel
+from models.checker_model import CheckerModel
 from utils.csv_handler import CSVHandler
 from config.config import CHECK_DELAY, MAX_SESSIONS_PER_USER, MAX_RETRIES, SESSIONS_DIR
 
@@ -17,7 +17,7 @@ class CheckerController:
     def __init__(self):
         self.session_model = SessionModel()
         self.proxy_model = ProxyModel()
-        self.result_model = ResultModel()
+        self.result_model = CheckerModel()
         self.csv_handler = CSVHandler()
         self.active_clients = {}
         self.error_handlers = []
@@ -152,14 +152,7 @@ class CheckerController:
 
             # Сохраняем результат в БД
             if result['has_telegram']:
-                self.result_model.save_check_result(
-                    phone=phone,
-                    full_name=full_name,
-                    telegram_id=result['telegram_id'],
-                    username=result['username'],
-                    user_id=user_id,
-                    batch_id=batch_id
-                )
+                self.result_model.bulk_save_check_result(results=batch_id)
 
             return result
 
