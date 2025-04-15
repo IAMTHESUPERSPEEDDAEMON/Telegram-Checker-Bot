@@ -23,7 +23,7 @@ class Logger:
         Initialize the logger with custom configuration.
 
         Args:
-            log_file_path (str): Path to the log file
+            log_file_name (str): Path to the log file
             max_file_size (int): Maximum size of log file before rotation in bytes (default: 5MB)
             backup_count (int): Number of backup files to keep (default: 5)
         """

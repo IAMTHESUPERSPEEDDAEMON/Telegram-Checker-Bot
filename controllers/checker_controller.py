@@ -20,16 +20,6 @@ class CheckerController:
         self.result_model = CheckerModel()
         self.csv_handler = CSVHandler()
         self.active_clients = {}
-        self.error_handlers = []
-
-    def add_error_handler(self, handler):
-        """Добавляет обработчик ошибок"""
-        self.error_handlers.append(handler)
-
-    def notify_error(self, error_type, message, details=None):
-        """Уведомляет обработчики об ошибке"""
-        for handler in self.error_handlers:
-            handler(error_type, message, details)
 
     @staticmethod
     def generate_random_name():
@@ -59,7 +49,8 @@ class CheckerController:
                 user = import_result.users[0]
                 result['has_telegram'] = True
                 result['telegram_id'] = user.id
-                result['username'] = user.username
+                result['username'] = user.username or None
+            elif import_result.chats:
 
                 logging.info(f"{phone} зарегистрирован в Telegram (ID: {user.id}, Username: {user.username})")
 
