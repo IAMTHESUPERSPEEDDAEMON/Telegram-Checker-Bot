@@ -1,5 +1,6 @@
 import asyncio
 from telethon.sync import TelegramClient
+from telethon.sessions import StringSession
 from models.session_model import SessionModel
 from models.proxy_model import ProxyModel
 from utils.logger import Logger
@@ -36,10 +37,9 @@ class SessionService:
             )
 
             session_id = await self.session_model.add_session_to_db(session_data)
-            session_id = session_id.get('id')
 
             if session_id is not None and isinstance(session_id, int) and session_id > 0:
-                return {'status': 'success', 'message': f'Сессия {phone} успешно добавлена.'}
+                return {'status': 'success', 'message': f'Сессия {phone} успешно добавлена. ID: {session_id}.'}
             else:
                 return {'status': 'error',
                         'message': f'Ошибка добавления сессии для телефона {phone}.\n{session_id}'}
@@ -59,10 +59,10 @@ class SessionService:
                 return {'status': 'error', 'message': f'Ошибка при обновлении сессии {session_id}.'}
 
 
-    async def check_session(self, session_phone):
+    async def check_session(self, session_id):
         """Проверяет работоспособность одной сессии"""
-        # получаем сессию по номеру
-        session = await self.session_model.get_session_by_phone(session_phone)
+        # получаем сессию по id
+        session = await self.session_model.get_session_by_id(session_id)
         if session:
             result = {
                 'id': session['id'],
@@ -71,17 +71,17 @@ class SessionService:
                 'error': None
             }
         else:
-            return {'status': 'error', 'message': f'Сессия {session_phone} не найдена'}
-
+            return {'status': 'error', 'message': f'Сессия {session_id} не найдена'}
         # Форматируем прокси для Telethon
         proxy = None
-        if 'proxy_id' in session and session['proxy_id']:
-            proxy = self.proxy_model.format_proxy_for_telethon(await self.proxy_model.get_proxy_by_id(session['proxy_id']))
+        if session['proxy_id'] and session['proxy_id'] != 0:
+            proxy = await self.proxy_model.format_proxy_for_telethon(await self.proxy_model.get_proxy_by_id(session['proxy_id']))
 
         try:
-            # Создаем клиента
+            # Создаем клиента с использованием StringSession
+            string_session = StringSession(session['session_file'])
             client = TelegramClient(
-                session['session_file'],
+                string_session,
                 session['api_id'],
                 session['api_hash'],
                 proxy=proxy
@@ -117,7 +117,7 @@ class SessionService:
             sessions = self.session_model.get_all_sessions()
 
             # Создаем задачи для проверки каждой сессии
-            tasks = [self.check_session(session) for session in sessions]
+            tasks = [self.check_session(session['id']) for session in sessions]
 
             # Запускаем все задачи параллельно
             results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -182,10 +182,10 @@ class SessionService:
         params_list = []
         for i, session in enumerate(sessions_without_proxy):
             proxy = available_proxies[i % len(available_proxies)]  # Назначаем прокси по кругу
-            params_list.append((proxy['id'], session['id']))  # (proxy_id, session_id)
+            params_list.append((proxy['id'], session.get('id')))  # (proxy_id, session_id)
 
         assigned_count = self.session_model.assign_proxies_to_sessions(params_list)
-        if assigned_count is int:
+        if assigned_count is int and assigned_count > 0:
             return {'status': 'success', 'message': f'ВСе свободные прокси привязаны, кол-во обработанных строк: {assigned_count}.'}
         else:
             return {'status': 'error', 'message': f'Ошибка при назначении прокси: {assigned_count}'}

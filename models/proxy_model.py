@@ -1,4 +1,3 @@
-import socks
 from dao.database import DatabaseManager
 from utils.logger import Logger
 
@@ -88,7 +87,7 @@ class ProxyModel:
         params = (proxy_id,)
         try:
             proxy = self.db.execute_query(query, params)
-            return proxy
+            return proxy[0]
         except Exception as e:
             logger.error(f"Прокси с id {proxy_id} не найден: {e}")
             return None
@@ -111,7 +110,8 @@ class ProxyModel:
         SELECT p.* FROM proxies p
         LEFT JOIN telegram_sessions s ON p.id = s.proxy_id
         WHERE s.id IS NULL AND p.is_active = TRUE
-        ORDER BY AGE(p.created_at) DESC LIMIT %s
+        ORDER BY p.last_checked DESC
+        LIMIT %s
         """
 
         try:
@@ -160,28 +160,25 @@ class ProxyModel:
             return False
 
 
-    def format_proxy_for_telethon(self, proxy):
+    async def format_proxy_for_telethon(self, proxy):
         """Форматирует прокси для использования в Telethon"""
         proxy_dict = None
-
         if proxy['type'] == 'http':
             proxy_dict = {
-                'proxy_type': proxy['type'],
+                'proxy_type': 'HTTP',
                 'addr': proxy['host'],
                 'port': proxy['port'],
                 'username': proxy['username'],
                 'password': proxy['password']
             }
         elif proxy['type'] == 'socks5':
-            proxy_type = socks.SOCKS5
             proxy_dict = {
-                'proxy_type': proxy_type,
+                'proxy_type': 'SOCKS5',
                 'addr': proxy['host'],
                 'port': proxy['port'],
                 'username': proxy['username'],
                 'password': proxy['password']
             }
-
         return proxy_dict
 
     async def get_proxies_stats(self):

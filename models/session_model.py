@@ -74,8 +74,8 @@ class SessionModel:
         params = (phone, api_id, api_hash, string_session)
 
         result = self.db.execute_query(query, params)
-        logger.info(f'Успех! id Добавленной сессии для телефона {phone}: {result[0]}')
-        return result[0]
+        logger.info(f'Успех! id Добавленной сессии для телефона {phone}: {result}')
+        return result
 
     @staticmethod
     async def create_session(phone, api_id, api_hash, code_callback=None, password_callback=None, proxy=None):
@@ -86,9 +86,10 @@ class SessionModel:
         if not os.path.exists(SESSIONS_DIR):
             os.makedirs(SESSIONS_DIR)
         # Проверяем существование файла сессии
-        if not os.path.exists(f"{SESSIONS_DIR}/{session_file}.session"):
-            logger.info(f"Сессия для {phone} не найдена. Создаем новую...")
-
+        if os.path.exists(f"{SESSIONS_DIR}/{session_file}.session"):
+            logger.info(f"Сессия для {phone} уже есть. Пересоздаю...")
+            # Удаляем старую сессию
+            os.remove(f'{session_path}.session')
         try:
             # Создаем клиента с указанием system_version и device_model
             client = TelegramClient(
@@ -126,28 +127,28 @@ class SessionModel:
                     return None
 
             # Получаем строковое представление сессии
-            print(1)
             string_session = StringSession.save(client.session)
-            print(string_session)
             # Закрываем клиент
             await client.disconnect()
+            #Удаляю файл
+            os.remove(f'{session_path}.session')
+
             return [phone, api_id, api_hash, string_session]
         except Exception as e:
             logger.error(f"Ошибка при авторизации: {e}")
             raise e
 
-
     async def get_session_by_id(self, session_id):
         """Получает сессию по id"""
         query = """
         SELECT s.*, p.type as proxy_type,
-               p.host, p.port, p.username as proxy_username, p.password as proxy_password
+               p.host, p.port, p.username, p.password
         FROM telegram_sessions s
         LEFT JOIN proxies p ON s.proxy_id = p.id
         WHERE s.id = %s
         """
         try:
-            session_data = await self.db.execute_query(query, (session_id,))
+            session_data = self.db.execute_query(query, (session_id,))
             return session_data[0] if session_data else None
         except Exception as e:
             logger.error(f"Ошибка получения сессии по id {session_id}: {e}")
@@ -157,7 +158,7 @@ class SessionModel:
         """Получает сессию по номеру телефона"""
         query = """
         SELECT s.*, p.type as proxy_type,
-               p.host, p.port, p.username as proxy_username, p.password as proxy_password
+               p.host, p.port, p.username, p.password
         FROM telegram_sessions s
         LEFT JOIN proxies p ON s.proxy_id = p.id
         WHERE s.phone = %s
@@ -175,23 +176,23 @@ class SessionModel:
         query = """
         SELECT s.phone, s.api_id, s.api_hash, s.session_file, s.proxy_id
         FROM telegram_sessions s
-        WHERE s.is_active = TRUE
+        WHERE s.is_active = TRUE 
         ORDER BY s.last_used ASC
         LIMIT %s
         """
 
         try:
             sessions = self.db.execute_query(query, (limit,))
-            logger.info(f"Получено {len(sessions)} сессий с привязанными прокси")
+            logger.info(f"Найдено {len(sessions)} активных сессий.")
             return sessions
         except Exception as e:
-            logger.error(f"Ошибка при получении доступных сессий с привязанными прокси: {e}")
+            logger.error(f"Ошибка при получении активных сессий: {e}")
             raise
 
     def get_available_sessions_without_proxy(self, limit=10):
         """Получает доступные активные сессии не привязанные к прокси"""
         query = """
-        SELECT s.phone, s.api_id, s.api_hash, s.session_file
+        SELECT s.*
         FROM telegram_sessions s
         WHERE s.is_active = TRUE AND s.proxy_id IS NULL
         ORDER BY s.last_used ASC

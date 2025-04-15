@@ -16,7 +16,7 @@ class SessionController:
         self.session_service = SessionService()
         self.view = TelegramView()
 
-    async def delete_session(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    async def delete_session_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Удаляет сессию из базы данных"""
         if not await is_admin(update):
             return
@@ -74,7 +74,6 @@ class SessionController:
 
         async def code_callback(phone, phone_code_hash):
             """Колбэк для получения кода подтверждения через Telegram"""
-            logger.info(f"[CALLBACK] code_callback triggered for {phone}")
             # Сохраняем phone_code_hash для использования при входе
             session_data[user_id]['phone_code_hash'] = phone_code_hash
 
@@ -114,8 +113,6 @@ class SessionController:
         """Обрабатывает полученный код подтверждения"""
         user_id = update.effective_user.id
         code = update.message.text.strip()
-        logger.info(f"[PROCESS_CODE] Code received: {code} for user_id: {user_id}")
-        logger.info(f"[PROCESS_CODE] Session data: {session_data.get(user_id)}")
 
         if user_id in session_data and 'code_future' in session_data[user_id]:
             # Устанавливаем результат будущего значения
@@ -127,7 +124,13 @@ class SessionController:
                 f"✅ Код получен: {code}. Выполняется вход..."
             )
 
-            # Если двухфакторная аутентификация не требуется, процесс завершится автоматически
+            # Проверяем, требуется ли двухфакторная аутентификация с паролем
+            if not session_data[user_id].get('is_2fa_required', False):
+                await self.view.send_message(
+                    update,
+                    "🔑 Двухфакторная аутентификация не требуется. Вход выполнен."
+                )
+                return ConversationHandler.END
             # Иначе будет запрошен пароль через password_callback
             return WAITING_FOR_PASSWORD
         else:
@@ -189,7 +192,7 @@ class SessionController:
     async def check_sessions_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обрабатывает команду /check_sessions - проверяет работоспособность сессий"""
         # Проверяем, является ли пользователь администратором
-        if not is_admin(update):
+        if not await is_admin(update):
             return
 
         await self.view.send_message(update, "Начинаем проверку сессий...")
@@ -198,7 +201,7 @@ class SessionController:
 
     async def update_session_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обновляет данные сессии."""
-        if not is_admin(update):
+        if not await is_admin(update):
             return
 
         if not context.args or len(context.args) < 2:
@@ -215,7 +218,7 @@ class SessionController:
 
     async def assign_proxies_to_sessions_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Присваивает прокси к сессиям."""
-        if not is_admin(update):
+        if not await is_admin(update):
             return
         await self.view.send_result_message(update, await self.session_service.assign_proxies_to_sessions())
 

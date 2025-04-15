@@ -33,17 +33,17 @@ class BotController:
 
         # Админские команды
         self.app.add_handler(CommandHandler("status", self.status_command))
-        self.app.add_handler(CommandHandler("update_session", self.update_session_command))
-        self.app.add_handler(CommandHandler("delete_session", self.delete_session_command))
-        self.app.add_handler(CommandHandler("check_sessions", self.check_sessions_command))
+        self.app.add_handler(CommandHandler("update_session", self.session_controller.update_session_command))
+        self.app.add_handler(CommandHandler("delete_session", self.session_controller.delete_session_command))
+        self.app.add_handler(CommandHandler("check_sessions", self.session_controller.check_sessions_command))
+        self.app.add_handler(CommandHandler("assign_proxys_to_sessions", self.session_controller.assign_proxies_to_sessions_command))
         self.app.add_handler(CommandHandler("add_proxy", self.add_proxy_command))
         self.app.add_handler(CommandHandler("update_proxy", self.update_proxy_command))
         self.app.add_handler(CommandHandler("delete_proxy", self.delete_proxy_command))
         self.app.add_handler(CommandHandler("check_proxies", self.check_proxies_command))
-        self.app.add_handler(CommandHandler("assign_proxys_to_sessions", self.assign_proxys_to_sessions_command))
         # Регистрация обработчика беседы для добавления сессии
         add_session_conv = ConversationHandler(
-            entry_points=[CommandHandler('add_session', self.add_session)],
+            entry_points=[CommandHandler('add_session', self.session_controller.start_add_session)],
             states={
                 WAITING_FOR_CODE: [
                     MessageHandler(filters.TEXT & ~filters.COMMAND, self.session_controller.process_code)],
@@ -72,7 +72,7 @@ class BotController:
     async def status_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обрабатывает команду /status - показывает статус сессий и прокси"""
         # Проверяем, является ли пользователь администратором
-        if not is_admin(update):
+        if not await is_admin(update):
             return
 
         # Получаем статус сессий и прокси
@@ -82,32 +82,6 @@ class BotController:
         # Отправляем статус
         await self.view.send_status_message(update, sessions_stats['message'], proxies_stats['message'])
 
-    """Блок сессий==================================================================================================="""
-
-    async def add_session(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Обрабатывает команду /add_session - добавляет новую сессию"""
-        await self.session_controller.start_add_session(update, context)
-
-
-    async def update_session_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Обновляет данные сессии."""
-        await self.session_controller.update_session_command(update, context)
-
-
-    async def delete_session_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Удаляет сессию по указанному ID"""
-        await self.session_controller.delete_session(update, context)
-
-
-    async def check_sessions_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Обрабатывает команду /check_sessions - проверяет работоспособность сессий"""
-        # Delegation to session controller
-        await self.session_controller.check_sessions_command(update, context)
-
-
-    async def assign_proxys_to_sessions_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Присваивает прокси к сессиям"""
-        await self.session_controller.assign_proxies_to_sessions_command(update, context)
 
     """Блок прокси==================================================================================================="""
 
