@@ -1,6 +1,8 @@
 import csv
 import os
 import logging
+from curses.ascii import isdigit
+
 from config.config import TEMP_DIR
 
 

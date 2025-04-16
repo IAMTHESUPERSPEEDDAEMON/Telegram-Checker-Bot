@@ -59,7 +59,7 @@ class BotController:
         self.app.add_handler(add_session_conv)
 
         # Файлы
-        self.app.add_handler(MessageHandler(filters.Document.FileExtension('csv'), self.process_csv))
+        self.app.add_handler(MessageHandler(filters.Document.FileExtension('csv'), self.checker.start_processing_csv))
 
     async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обрабатывает команду /help"""
@@ -80,59 +80,6 @@ class BotController:
 
     """Блок работы чекера ==========================================================================================="""
 
-    async def process_csv(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Обрабатывает полученный CSV файл"""
-        # Получаем информацию о файле
-        file = update.message.document
-        file_id = file.file_id
-        file_name = file.file_name
-
-        # Сообщаем пользователю, что начинаем обработку
-        await self.view.send_message(
-            update,
-            f"Начинаю обработку файла {file_name}. Это может занять некоторое время..."
-        )
-
-        try:
-            # Скачиваем файл
-            file_object = await context.bot.get_file(file_id)
-            file_content = await file_object.download_as_bytearray()
-
-            # Сохраняем файл во временную директорию
-            temp_path = self.csv_handler.save_temp_file(file_content, file_name)
-
-            # Обрабатываем файл и проверяем номера
-            processing_message = await self.view.send_message(
-                update,
-                "Проверяю номера из файла на наличие в Telegram..."
-            )
-
-            # Запускаем процесс проверки
-            result = await self.checker.process_csv_file(temp_path, update.effective_user.id)
-
-            if result:
-                # Отправляем результаты пользователю
-                await self.view.send_check_results(update, result)
-
-                # Отправляем файл с результатами
-                await self.view.send_document(
-                    update,
-                    context,
-                    result['file_path'],
-                    caption=f"Найдено {result['telegram_found']} номеров с Telegram из {result['total_checked']}"
-                )
-            else:
-                await self.view.send_message(
-                    update,
-                    "Не удалось найти номера с Telegram в вашем файле или произошла ошибка при обработке."
-                )
-
-        except Exception as e:
-            logger.error(f"Ошибка при обработке файла: {e}")
-            await self.view.send_message(
-                update,
-                f"Произошла ошибка при обработке файла: {str(e)}"
-            )
 
     # async def handle_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
     #     """Обрабатывает нажатия на инлайн-кнопки"""

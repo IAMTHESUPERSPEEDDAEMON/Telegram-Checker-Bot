@@ -22,7 +22,6 @@ ADMIN_IDS = [int(id) for id in os.getenv('ADMIN_IDS', '').split(',') if id]
 # Настройки проверки
 MAX_SESSIONS_PER_USER = int(os.getenv('MAX_SESSIONS_PER_USER'))  # Максимальное количество сессий для одного пользователя
 CHECK_DELAY = float(os.getenv('CHECK_DELAY'))  # Задержка между проверками (в секундах)
-MAX_RETRIES = int(os.getenv('MAX_RETRIES'))  # Максимальное количество попыток при ошибке
 BATCH_SIZE = int(os.getenv('BATCH_SIZE'))  # Размер пакета номеров для проверки
 
 # Пути к файлам

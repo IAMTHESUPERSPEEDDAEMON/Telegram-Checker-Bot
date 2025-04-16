@@ -2,24 +2,65 @@ import asyncio
 import logging
 import re
 import os
-from telethon.sync import TelegramClient
-from telethon import functions, types
 import random
 import string
-from models.session_model import SessionModel
-from models.proxy_model import ProxyModel
-from models.checker_model import CheckerModel
-from utils.csv_handler import CSVHandler
-from config.config import CHECK_DELAY, MAX_SESSIONS_PER_USER, MAX_RETRIES, SESSIONS_DIR
+
+from telegram import Update
+from telegram.ext import ContextTypes
+from telethon.sync import TelegramClient
+from telethon import functions, types
+
+from config.config import CHECK_DELAY, MAX_SESSIONS_PER_USER, SESSIONS_DIR
+from services.checker_service import CheckerService
+from services.session_service import SessionService
+from views.telegram_view import TelegramView
 
 
 class CheckerController:
     def __init__(self):
-        self.session_model = SessionModel()
-        self.proxy_model = ProxyModel()
-        self.result_model = CheckerModel()
-        self.csv_handler = CSVHandler()
-        self.active_clients = {}
+        self.checker_service = CheckerService()
+        self.session_service = SessionService()
+        self.view = TelegramView()
+
+    async def start_processing_csv(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        # Сообщаем пользователю, что начинаем обработку
+        await self.view.send_message(
+            update,
+            f"Начинаю обработку файла {update.message.document.file_name}. Это может занять некоторое время..."
+        )
+
+        temp_path = await self.checker_service.save_csv(update, context)
+        if temp_path is None:
+            await self.view.send_message(
+                update,
+                f"Произошла ошибка при обработке файла"
+            )
+            return
+        else:
+            # Обрабатываем файл и проверяем номера
+            processing_message = await self.view.send_message(
+                update,
+                "Проверяю номера из файла на наличие в Telegram..."
+            )
+
+        # Запускаем процесс проверки
+        result = await self.checker_service.process_csv_file(temp_path, update.effective_user.id)
+        if result:
+            # Отправляем результаты пользователю
+            await self.view.send_check_results(update, result)
+
+            # Отправляем файл с результатами
+            await self.view.send_document(
+                update,
+                context,
+                result['file_path'],
+                caption=f"Найдено {result['telegram_found']} номеров с Telegram из {result['total_checked']}"
+            )
+        else:
+            await self.view.send_message(
+                update,
+                "Не удалось найти номера с Telegram в вашем файле или произошла ошибка при обработке."
+            )
 
     @staticmethod
     def generate_random_name():
@@ -162,7 +203,7 @@ class CheckerController:
             return []
 
         # Получаем доступные сессии (не более MAX_SESSIONS_PER_USER)
-        sessions = self.ses.get_available_sessions(MAX_SESSIONS_PER_USER)
+        sessions = self.session_service.get_available_sessions(MAX_SESSIONS_PER_USER)
         if not sessions:
             error_msg = "Нет доступных сессий для проверки"
             logging.error(error_msg)
@@ -210,45 +251,3 @@ class CheckerController:
         self.result_model.update_batch_status(batch_id, status)
 
         return {'batch_id': batch_id, 'results': results}
-
-    async def process_csv_file(self, file_path, user_id):
-        """Обрабатывает CSV файл и проверяет все номера"""
-        try:
-            # Читаем CSV файл
-            csv_data = self.csv_handler.read_csv_file(file_path)
-
-            # Извлекаем номера и имена
-            phone_data = self.csv_handler.extract_phone_name(csv_data)
-
-            if not phone_data:
-                error_msg = "В файле не найдены номера телефонов"
-                logging.error(error_msg)
-                self.notify_error("csv_error", error_msg, file_path)
-                return None
-
-            # Проверяем номера
-            results = await self.check_numbers_batch(
-                {'data': phone_data, 'filename': os.path.basename(file_path)},
-                user_id
-            )
-
-            if not results or not results['results']:
-                return None
-
-            # Экспортируем результаты в CSV
-            output_path = self.result_model.export_results_to_csv(
-                results['batch_id'],
-                csv_data
-            )
-
-            return {
-                'batch_id': results['batch_id'],
-                'file_path': output_path,
-                'total_checked': len(phone_data),
-                'telegram_found': len(results['results'])
-            }
-
-        except Exception as e:
-            logging.error(f"Ошибка при обработке файла {file_path}: {e}")
-            self.notify_error("file_error", f"Ошибка при обработке файла", str(e))
-            return None

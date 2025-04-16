@@ -15,8 +15,8 @@ class CheckerModel:
 
         query = """
         INSERT INTO check_results 
-        (phone, full_name, telegram_id, username, has_telegram, user_id) 
-        VALUES (%s, %s, %s, %s, %s, %s)
+        (phone, full_name, telegram_id, username, has_telegram, user_id, batch_id) 
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
         """
 
         try:

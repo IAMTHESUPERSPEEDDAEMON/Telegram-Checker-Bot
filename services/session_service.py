@@ -1,6 +1,8 @@
 import asyncio
 from telethon.sync import TelegramClient
 from telethon.sessions import StringSession
+
+from config.config import MAX_SESSIONS_PER_USER
 from models.session_model import SessionModel
 from models.proxy_model import ProxyModel
 from utils.logger import Logger
@@ -92,11 +94,11 @@ class SessionService:
             if await client.is_user_authorized():
                 result['is_working'] = True
                 # Обновляем статус сессии
-                self.session_model.update_session_status(session['id'], True)
+                await self.session_model.update_session_status(session['id'], True)
             else:
                 result['error'] = "Сессия не авторизована"
                 # Обновляем статус сессии
-                self.session_model.update_session_status(session['id'], False)
+                await self.session_model.update_session_status(session['id'], False)
 
             # Отключаемся
             await client.disconnect()
@@ -105,16 +107,15 @@ class SessionService:
             result['error'] = str(e)
 
             # Обновляем статус сессии
-            self.session_model.update_session_status(session['id'], False)
+            await self.session_model.update_session_status(session['id'], False)
 
         return result
-
 
     async def check_all_sessions(self):
         """Проверяет работоспособность всех сессий"""
         try:
             # получаем все сессии
-            sessions = self.session_model.get_all_sessions()
+            sessions = await self.session_model.get_all_sessions()
 
             # Создаем задачи для проверки каждой сессии
             tasks = [self.check_session(session['id']) for session in sessions]
@@ -152,23 +153,21 @@ class SessionService:
 
             # Выполняем одно пакетное обновление вместо множества отдельных запросов
             if session_updates:
-                self.session_model.batch_update_sessions_status(session_updates)
-            updated_session_info = self.session_model.get_available_sessions(limit=1000)
+                await self.session_model.batch_update_sessions_status(session_updates)
+            updated_session_info = await self.session_model.get_available_sessions(limit=1000)
             non_active = int(len(processed_results)) - int(len(updated_session_info))
 
             return {'status': 'success',
                     'message': f'Проверенно {int(len(processed_results))} сессий, активных = {int(len(updated_session_info))}, не активных = {non_active}'}
 
-
         except Exception as e:
             logger.error(f"Ошибка при проверке сессий: {e}")
             return {'status': 'error', 'message': f"Ошибка при проверке сессий: {e}"}
 
-
     async def assign_proxies_to_sessions(self):
         """Назначает прокси для сессий без прокси"""
         # Получаем сессии без прокси
-        sessions_without_proxy = self.session_model.get_available_sessions_without_proxy()
+        sessions_without_proxy = await self.session_model.get_available_sessions_without_proxy()
 
         if not sessions_without_proxy:
             return {'status': 'error', 'message': f'Все сессии уже имеют прокси'}
@@ -184,12 +183,11 @@ class SessionService:
             proxy = available_proxies[i % len(available_proxies)]  # Назначаем прокси по кругу
             params_list.append((proxy['id'], session.get('id')))  # (proxy_id, session_id)
 
-        assigned_count = self.session_model.assign_proxies_to_sessions(params_list)
+        assigned_count = await self.session_model.assign_proxies_to_sessions(params_list)
         if assigned_count is int and assigned_count > 0:
             return {'status': 'error', 'message': f'Ошибка при назначении прокси: {assigned_count}'}
         else:
             return {'status': 'success', 'message': f'ВСе свободные прокси привязаны, кол-во обработанных строк: {assigned_count}.'}
-
 
     async def get_sessions_stats(self):
         """Получаем статистику по сессиям"""
@@ -198,3 +196,46 @@ class SessionService:
             return {'status': 'success', 'message': stats}
         else:
             return {'status': 'error', 'message': "Нет данных для статистики."}
+
+    async def get_active_clients(self):
+        """Ініціалізує до max_sessions клієнтів Telegram із активних сесій"""
+        clients = []
+        sessions = await self.session_model.get_available_sessions(MAX_SESSIONS_PER_USER)
+
+        for session in sessions:
+            try:
+                proxy = None
+                if session['proxy_id']:
+                    proxy = await self.proxy_model.format_proxy_for_telethon(
+                        await self.proxy_model.get_proxy_by_id(session['proxy_id'])
+                    )
+
+                string_session = StringSession(session['session_file'])
+                client = TelegramClient(
+                    string_session,
+                    session['api_id'],
+                    session['api_hash'],
+                    proxy=proxy
+                )
+
+                await client.connect()
+
+                if not await client.is_user_authorized():
+                    logger.warning(f"Сесія {session['id']} не авторизована")
+                    await client.disconnect()
+                    await self.session_model.update_session_status(session['id'], False)
+                    continue
+
+                # Можна додати оновлення last_used або is_active при потребі
+                clients.append({
+                    'client': client,
+                    'session_id': session['id'],
+                    'phone': session['phone']
+                })
+
+            except Exception as e:
+                logger.error(f"Помилка при ініціалізації сесії {session['id']}: {e}")
+                # Можна оновити статус сесії до неактивного
+                await self.session_model.update_session_status(session['id'], False)
+
+        return clients

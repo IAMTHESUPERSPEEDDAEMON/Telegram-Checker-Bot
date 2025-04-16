@@ -172,7 +172,7 @@ class SessionModel:
             logger.error(f"Ошибка получения сессии по номеру телефона {phone}: {e}")
             raise
 
-    def get_available_sessions(self, limit=10):
+    async def get_available_sessions(self, limit=10):
         """Получает доступные активные сессии"""
         query = """
         SELECT s.phone, s.api_id, s.api_hash, s.session_file, s.proxy_id
@@ -190,7 +190,7 @@ class SessionModel:
             logger.error(f"Ошибка при получении активных сессий: {e}")
             raise
 
-    def get_available_sessions_without_proxy(self, limit=10):
+    async def get_available_sessions_without_proxy(self, limit=10):
         """Получает доступные активные сессии не привязанные к прокси"""
         query = """
         SELECT s.*
@@ -207,7 +207,7 @@ class SessionModel:
             logger.error(f"Ошибка получения доступных активных сессий без прокси: {e}")
             raise
 
-    def update_session_status(self, session_id, is_active):
+    async def update_session_status(self, session_id, is_active):
         """Обновляет статус сессии"""
         query = """
         UPDATE telegram_sessions
@@ -224,7 +224,7 @@ class SessionModel:
             logger.error(f"Ошибка обновления статуса сессии {session_id} status: {e}")
             raise
 
-    def update_last_used(self, session_id):
+    async def update_last_used(self, session_id):
         """Обновляет время последнего использования сессии"""
         query = """
         UPDATE telegram_sessions
@@ -239,7 +239,7 @@ class SessionModel:
             logger.error(f"Ошибка обновления времени последнего использования сессии {session_id}: {e}")
             raise
 
-    def batch_update_sessions_status(self, session_updates):
+    async def batch_update_sessions_status(self, session_updates):
         """
         Пакетно обновляет статусы нескольких сессий одним запросом
 
@@ -273,7 +273,7 @@ class SessionModel:
             logger.error(f"Ошибка пакетного обновления статусов сессий: {e}")
             return None
 
-    def assign_proxies_to_sessions(self, params_list):
+    async def assign_proxies_to_sessions(self, params_list):
         """Назначает прокси для сессий"""
         query = """
         UPDATE telegram_sessions
@@ -289,7 +289,7 @@ class SessionModel:
             logger.error(f"Ошибка привязки проксей к сессиям: {e}")
             return e
 
-    def get_all_sessions(self):
+    async def get_all_sessions(self):
         """Возвращает все сессии"""
         query = """
         SELECT s.*, p.type as proxy_type, p.host, p.port, p.username as proxy_username, 
