@@ -72,3 +72,8 @@ class TelegramView:
         message = f"🔐 Введите пароль двухфакторной аутентификации для номера {phone}:"
         sent_msg = await context.bot.send_message(chat_id=chat_id, text=message)
         return sent_msg.message_id
+
+    async def send_start_csv_process(self, update: Update):
+        """Отправляет сообщение о начале обработки CSV файла"""
+        message = f"Начинаю обработку файла {update.message.document.file_name}. Это может занять некоторое время..."
+        await update.message.reply_text(message)

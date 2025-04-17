@@ -108,15 +108,15 @@ class CheckerService:
                 results_list.append(result)
                 await self.checker_model.increment_batch_counter(batch_id, result['has_telegram'])
 
-    #TODO: реализовать логику работы проверки и экспортирования результатов в CSV файл
+
     async def export_results_to_csv(self, batch_id, original_data):
         """Экспортирует результаты проверки в CSV файл"""
-        batch = self.checker_model.get_batch_by_id(batch_id)
+        batch = await self.checker_model.get_batch_by_id(batch_id)
         if not batch:
             logger.error(f"Batch {batch_id} not found")
             return None
 
-        results = self.checker_model.get_batch_results(batch_id)
+        results = await self.checker_model.get_batch_results(batch_id)
         if not results:
             logger.warning(f"No results found for batch {batch_id}")
             return None
