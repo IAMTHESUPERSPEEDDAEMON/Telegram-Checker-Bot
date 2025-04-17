@@ -1,10 +1,11 @@
 import csv
 import os
-import logging
-from curses.ascii import isdigit
 
 from config.config import TEMP_DIR
+from utils.logger import Logger
+from utils.phone_normalizer import normalize_phone_number
 
+logger=Logger()
 
 class CSVHandler:
     @staticmethod
@@ -15,10 +16,10 @@ class CSVHandler:
         try:
             with open(file_path, 'wb') as f:
                 f.write(file_content)
-            logging.info(f"Saved temporary file: {file_path}")
+            logger.info(f"Saved temporary file: {file_path}")
             return file_path
         except Exception as e:
-            logging.error(f"Error saving temporary file: {e}")
+            logger.error(f"Error saving temporary file: {e}")
             raise
 
     @staticmethod
@@ -36,7 +37,7 @@ class CSVHandler:
                 'total_rows': len(rows)
             }
         except Exception as e:
-            logging.error(f"Error reading CSV file {file_path}: {e}")
+            logger.error(f"Error reading CSV file {file_path}: {e}")
 
     @staticmethod
     def extract_phone_name(csv_data):
@@ -52,16 +53,7 @@ class CSVHandler:
             full_name = row[1].strip() if len(row) > 1 and row[1] else None
 
             if phone:
-                # Нормализуем формат номера (удаляем все нецифровые символы)
-                normalized_phone = ''.join(filter(str.isdigit, phone))
-
-                # Добавляем + в начало, если его нет и номер не начинается с 8
-                if normalized_phone and not normalized_phone.startswith('+'):
-                    if normalized_phone.startswith('8') and len(normalized_phone) == 11:
-                        # Заменяем 8 на 7 для российских номеров
-                        normalized_phone = '+7' + normalized_phone[1:]
-                    else:
-                        normalized_phone = '+' + normalized_phone
+                normalized_phone = normalize_phone_number(phone)
 
                 result.append({
                     'phone': normalized_phone,
@@ -91,8 +83,8 @@ class CSVHandler:
                     if phone and phone in results_dict:
                         writer.writerow(row)
 
-            logging.info(f"Created result CSV file: {output_path}")
+            logger.info(f"Created result CSV file: {output_path}")
             return output_path
         except Exception as e:
-            logging.error(f"Error creating result CSV file: {e}")
+            logger.error(f"Error creating result CSV file: {e}")
             raise

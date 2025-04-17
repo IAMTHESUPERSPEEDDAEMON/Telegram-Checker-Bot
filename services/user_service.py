@@ -18,7 +18,6 @@ class UserService:
             else:
                 return {'status': 'error', 'message': f'Пользователь с tgId: {telegram_id} уже существует'}
 
-
     async def delete_user(self, telegram_id):
         """Удалить пользователя из базы данных"""
         is_exists = await self.user_model.get_user_by_telegram_id(telegram_id)
@@ -28,13 +27,11 @@ class UserService:
         else:
             return {'status': 'error', 'message': f'Пользователь с tgId: {telegram_id} не существует'}
 
-
     async def get_user_by_telegram_id(self, telegram_id):
         """Получить пользователя по его tgId"""
         user = await self.user_model.get_user_by_telegram_id(telegram_id)
-        return {'status': 'success', 'message': f'Пользователь с tgId: {telegram_id} - {user}'}
+        return {'status': 'success', 'message': user}
 
-# TODO: добавить формирование CSV файла с данными о пользователях
     async def get_all_users(self):
         """Получить всех пользователей"""
         users = await self.user_model.get_all_users()

@@ -40,7 +40,7 @@ class CheckerModel:
             results = self.db.execute_query(query, (user_id, batch_id, limit, offset))
             return results
         except Exception as e:
-            logger.error(f"Error getting results for user {user_id}: {e}")
+            logger.error(f"Ошибка получения юзера по ID {user_id}: {e}")
             return None
 
     async def create_batch(self, user_id, original_filename, total_numbers):

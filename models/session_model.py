@@ -175,7 +175,7 @@ class SessionModel:
     async def get_available_sessions(self, limit=10):
         """Получает доступные активные сессии"""
         query = """
-        SELECT s.phone, s.api_id, s.api_hash, s.session_file, s.proxy_id
+        SELECT s.*
         FROM telegram_sessions s
         WHERE s.is_active = TRUE 
         ORDER BY s.last_used ASC

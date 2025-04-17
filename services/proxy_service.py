@@ -4,7 +4,7 @@ from models.proxy_model import ProxyModel
 
 class ProxyService:
     def __init__(self):
-        self.test_url = 'http://www.google.com'
+        self.test_url = 'https://check-host.net/ip'
         self.model = ProxyModel()
 
     async def delete_by_id(self, proxy_id):

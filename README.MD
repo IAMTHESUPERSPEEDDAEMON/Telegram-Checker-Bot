@@ -9,7 +9,7 @@ telegram_checker_bot/
 ├── services/
 │   ├── session_service.py    # Сервис для обработки логики работы с сессиями
 │   ├── proxy_service.py      # Сервис для обработки логики работы с прокси
-│   └──user_service.py        # Сервис для обработки логики работы сс юзером
+│   └── user_service.py        # Сервис для обработки логики работы сс юзером
 ├── dao/
 │   └── database.py           # Взаимодействие с MySQL
 ├── controllers/

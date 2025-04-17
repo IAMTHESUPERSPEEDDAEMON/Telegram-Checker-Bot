@@ -221,7 +221,7 @@ class SessionService:
                 await client.connect()
 
                 if not await client.is_user_authorized():
-                    logger.warning(f"Сесія {session['id']} не авторизована")
+                    logger.warning(f"Сессія {session['id']} не авторизована")
                     await client.disconnect()
                     await self.session_model.update_session_status(session['id'], False)
                     continue

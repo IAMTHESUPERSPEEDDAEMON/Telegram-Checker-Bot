@@ -77,8 +77,8 @@ class DatabaseManager:
                 username VARCHAR(255),
                 has_telegram BOOLEAN DEFAULT FALSE,
                 user_id INT NOT NULL,
-                checked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                FOREIGN KEY (batch_id) REFERENCES check_batches(id) ON DELETE CASCADE;
+                checked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (batch_id) REFERENCES check_batches(id) ON DELETE CASCADE
             )
             """,
             """
