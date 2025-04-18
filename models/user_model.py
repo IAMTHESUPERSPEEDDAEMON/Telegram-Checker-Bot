@@ -65,7 +65,7 @@ class UserModel:
             logger.info(f"Юзер {telegram_id} успешно удален")
             return True
         except Exception as e:
-            logger.error(f"Ошибка при удалении юзера {telegram_id} детали: {e}")
+            logger.error(f"Error in deleting user {telegram_id} details: {e}")
             return False
 
     async def get_user_by_telegram_id(self, telegram_id):
@@ -78,7 +78,7 @@ class UserModel:
             logger.info(f"Пытаюсь получить юзера: {telegram_id} из бд")
             return result[0]
         except Exception as e:
-            logger.error(f"Ошибка при получении юзера {telegram_id} детали: {e}")
+            logger.error(f"Error when getting user {telegram_id} details: {e}")
             return None
 
     async def get_all_users(self):

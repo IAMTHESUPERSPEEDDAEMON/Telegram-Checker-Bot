@@ -187,9 +187,9 @@ class ProxyModel:
                """
             result = self.db.execute_query(query)[0]
             return {
-                'total': result['total'],
-                'active': result['active'],
-                'inactive': result['inactive']
+                'total': int(result['total']),
+                'active': int(result['active']),
+                'inactive': int(result['inactive'])
             }
         except Exception as e:
             logger.error(f"Ошибка при получении статистики по прокси-серверам: {e}")

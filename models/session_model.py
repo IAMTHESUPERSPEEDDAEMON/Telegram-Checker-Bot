@@ -119,7 +119,7 @@ class SessionModel:
                         await client.sign_in(phone, code, phone_code_hash=sent_code.phone_code_hash)
                     except Exception as e:
                         if "Two-steps verification is enabled" in str(e):
-                            password = input("Введите пароль двухфакторной аутентификации: ")
+                            password = await password_callback(phone)
                             await client.sign_in(password=password)
                         else:
                             raise e

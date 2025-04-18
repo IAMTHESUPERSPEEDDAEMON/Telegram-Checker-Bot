@@ -184,10 +184,10 @@ class SessionService:
             params_list.append((proxy['id'], session.get('id')))  # (proxy_id, session_id)
 
         assigned_count = await self.session_model.assign_proxies_to_sessions(params_list)
-        if assigned_count is int and assigned_count > 0:
-            return {'status': 'error', 'message': f'Ошибка при назначении прокси: {assigned_count}'}
-        else:
+        if isinstance(assigned_count, int) and assigned_count > 0:
             return {'status': 'success', 'message': f'ВСе свободные прокси привязаны, кол-во обработанных строк: {assigned_count}.'}
+        else:
+            return {'status': 'error', 'message': f'Ошибка при назначении прокси: {assigned_count}'}
 
     async def get_sessions_stats(self):
         """Получаем статистику по сессиям"""

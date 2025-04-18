@@ -87,6 +87,9 @@ class SessionController:
 
         async def password_callback(phone):
             """Колбэк для получения пароля через Telegram"""
+            # Устанавливаем флаг, что требуется двухфакторная аутентификация
+            session_data[user_id]['is_2fa_required'] = True
+
             # Отправляем запрос пароля пользователю
             await self.view.send_password_request(data['chat_id'], context, phone)
 
@@ -144,9 +147,6 @@ class SessionController:
         """Обрабатывает полученный пароль двухфакторной аутентификации"""
         user_id = update.effective_user.id
         password = update.message.text.strip()
-
-        # Для безопасности, удаляем сообщение с паролем
-        await update.message.delete()
 
         if user_id in session_data and 'password_future' in session_data[user_id]:
             # Устанавливаем результат будущего значения

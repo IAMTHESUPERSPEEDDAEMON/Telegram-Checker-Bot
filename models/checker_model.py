@@ -24,7 +24,7 @@ class CheckerModel:
             logger.info(f"Кол-во строк записано в таблицу check_results: {affected_rows}")
             return affected_rows > 0
         except Exception as e:
-            logger.error(f"Была получена ошибка при выполнении batch-запроса в бд: {e}")
+            logger.error(f"There was an error in the bulk_save_check_result method: {e}")
             return False
 
     async def get_results_by_user_paginated(self, user_id, batch_id, offset=0, limit=1000):
@@ -40,7 +40,7 @@ class CheckerModel:
             results = self.db.execute_query(query, (user_id, batch_id, limit, offset))
             return results
         except Exception as e:
-            logger.error(f"Ошибка получения юзера по ID {user_id}: {e}")
+            logger.error(f"Error getting user by ID: {user_id}: {e}")
             return None
 
     async def create_batch(self, user_id, original_filename, total_numbers):
