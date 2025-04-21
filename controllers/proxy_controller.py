@@ -2,7 +2,6 @@ from telegram import Update
 from telegram.ext import ContextTypes
 
 from services.proxy_service import ProxyService
-from views.telegram_view import TelegramView
 from utils.admin_checker import is_admin
 
 class ProxyController:

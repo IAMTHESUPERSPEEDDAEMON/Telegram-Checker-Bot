@@ -5,7 +5,6 @@ from telegram.ext import ContextTypes, ConversationHandler
 from config.config import WAITING_FOR_CODE, WAITING_FOR_PASSWORD
 from services.session_service import SessionService
 from utils.logger import Logger
-from views.telegram_view import TelegramView
 from utils.admin_checker import is_admin
 
 logger = Logger()

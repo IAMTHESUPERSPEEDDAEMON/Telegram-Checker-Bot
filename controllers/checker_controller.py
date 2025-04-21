@@ -4,7 +4,6 @@ from telegram.ext import ContextTypes
 from services.checker_service import CheckerService
 from services.session_service import SessionService
 from services.user_service import UserService
-from views.telegram_view import TelegramView
 
 
 class CheckerController:

@@ -1,5 +1,4 @@
 from telegram import Update
-from telegram.ext import ContextTypes
 
 from services.user_service import UserService
 
