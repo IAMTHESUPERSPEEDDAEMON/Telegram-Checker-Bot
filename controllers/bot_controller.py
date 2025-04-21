@@ -1,12 +1,12 @@
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters, ConversationHandler
+from telegram import Update
+from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters, ConversationHandler, \
+    CallbackQueryHandler
 from controllers.checker_controller import CheckerController
 from controllers.session_controller import SessionController
 from controllers.proxy_controller import ProxyController
 from controllers.user_controller import UserController
 from utils.logger import Logger
 from views.telegram_view import TelegramView
-from utils.csv_handler import CSVHandler
 from config.config import BOT_TOKEN, WAITING_FOR_CODE, WAITING_FOR_PASSWORD
 from utils.admin_checker import is_admin
 
@@ -15,12 +15,11 @@ logger = Logger()
 
 class BotController:
     def __init__(self):
-        self.checker = CheckerController()
-        self.session_controller = SessionController()
-        self.proxy_controller = ProxyController()
-        self.user_controller = UserController()
         self.view = TelegramView()
-        self.csv_handler = CSVHandler()
+        self.checker = CheckerController(self.view)
+        self.session_controller = SessionController(self.view)
+        self.proxy_controller = ProxyController(self.view)
+        self.user_controller = UserController(self.view)
 
         # Создаем приложение
         self.app = ApplicationBuilder().token(BOT_TOKEN).build()
@@ -30,21 +29,14 @@ class BotController:
 
     def _register_handlers(self):
         """Регистрирует обработчики команд и сообщений"""
-        # Команды
-        self.app.add_handler(CommandHandler("start", self.user_controller.start_command))
+        # Базовые команды
+        self.app.add_handler(CommandHandler("start", self.show_main_menu))
+        self.app.add_handler(CommandHandler("menu", self.show_main_menu))
         self.app.add_handler(CommandHandler("help", self.help_command))
 
-        # Админские команды
-        self.app.add_handler(CommandHandler("status", self.status_command))
-        self.app.add_handler(CommandHandler("update_session", self.session_controller.update_session_command))
-        self.app.add_handler(CommandHandler("delete_session", self.session_controller.delete_session_command))
-        self.app.add_handler(CommandHandler("check_sessions", self.session_controller.check_sessions_command))
-        self.app.add_handler(
-            CommandHandler("assign_proxys_to_sessions", self.session_controller.assign_proxies_to_sessions_command))
-        self.app.add_handler(CommandHandler("add_proxy", self.proxy_controller.add_proxy_command))
-        self.app.add_handler(CommandHandler("update_proxy", self.proxy_controller.update_proxy_command))
-        self.app.add_handler(CommandHandler("delete_proxy", self.proxy_controller.delete_proxy_command))
-        self.app.add_handler(CommandHandler("check_proxies", self.proxy_controller.check_proxies_command))
+        # Общий обработчик для всех кнопок
+        self.app.add_handler(CallbackQueryHandler(self.handle_button_press))
+
         # Регистрация обработчика беседы для добавления сессии
         add_session_conv = ConversationHandler(
             entry_points=[CommandHandler('add_session', self.session_controller.start_add_session)],
@@ -60,6 +52,12 @@ class BotController:
 
         # Файлы
         self.app.add_handler(MessageHandler(filters.Document.FileExtension('csv'), self.checker.start_processing_csv))
+
+    async def show_main_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Показывает главное меню бота с кнопками"""
+        await self.user_controller.save_user_data(update)
+        is_admin_user = await is_admin(update)
+        await self.view.show_main_menu(update, is_admin_user)
 
     async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обрабатывает команду /help"""
@@ -78,33 +76,25 @@ class BotController:
         # Отправляем статус
         await self.view.send_status_message(update, sessions_stats['message'], proxies_stats['message'])
 
-    """Блок работы чекера ==========================================================================================="""
+    async def handle_button_press(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Обрабатывает нажатия на кнопки меню"""
+        query = update.callback_query
+        await query.answer()  # Отвечаем на callback запрос
 
+        callback_data = query.data
 
-    # async def handle_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-    #     """Обрабатывает нажатия на инлайн-кнопки"""
-    #     query = update.callback_query
-    #     await query.answer()
-    #
-    #     # Обрабатываем данные колбека
-    #     callback_data = query.data
-    #
-    #     if callback_data.startswith("check_batch_"):
-    #         batch_id = int(callback_data.replace("check_batch_", ""))
-    #         # Отправляем статус проверки
-    #         await self.view.send_batch_status(update, context, batch_id)
-    #
-    # async def error_handler(self, update: object, context: ContextTypes.DEFAULT_TYPE):
-    #     """Обрабатывает ошибки телеграм-бота"""
-    #     logger.error(f"Exception while handling an update: {context.error}")
-    #
-    #     # Отправляем сообщение об ошибке администраторам
-    #     for admin_id in ADMIN_IDS:
-    #         try:
-    #             error_text = f"🚨 Ошибка в боте: {context.error}"
-    #             await self.app.bot.send_message(chat_id=admin_id, text=error_text)
-    #         except Exception as e:
-    #             logger.error(f"Не удалось отправить уведомление об ошибке администратору {admin_id}: {e}")
+        # Обработка навигации по меню
+        if callback_data == "main_menu":
+            await self.show_main_menu(update, context)
+            return
+        elif callback_data == "proxy_menu":
+            if await is_admin(update):
+                await self.view.show_proxy_menu(update)
+            return
+        elif callback_data == "session_menu":
+            if await is_admin(update):
+                await self.view.show_session_menu(update)
+            return
 
     def run(self):
         """Запускает бота"""

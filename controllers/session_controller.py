@@ -14,9 +14,9 @@ session_data = {}
 
 
 class SessionController:
-    def __init__(self):
+    def __init__(self, view):
         self.session_service = SessionService()
-        self.view = TelegramView()
+        self.view = view
 
     async def delete_session_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Удаляет сессию из базы данных"""

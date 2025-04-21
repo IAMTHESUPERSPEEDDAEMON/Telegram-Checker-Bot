@@ -5,8 +5,39 @@ from telegram.ext import ContextTypes
 class TelegramView:
     """
     Класс для отображения сообщений в Telegram.
-    Не содержит бизнес-логики, только методы для отправки сообщений.
+    Не содержит бизнес-логики, только методы для формирования интерфейса бота
     """
+    # Вид главного меню
+    async def show_main_menu(self, update: Update, is_admin: bool):
+        """Показывает главное меню бота с кнопками"""
+        keyboard = []
+        # Кнопки для всех пользователей
+        keyboard.append([InlineKeyboardButton("📋 Помощь", callback_data="help")])
+
+        # Кнопки только для админов
+        if is_admin:
+            keyboard.append([
+                InlineKeyboardButton("🔑 Управление сессиями", callback_data="session_menu"),
+                InlineKeyboardButton("🌐 Управление прокси", callback_data="proxy_menu")
+            ])
+            keyboard.append([
+                InlineKeyboardButton("📊 Статус всей хуйни", callback_data="status")
+            ])
+
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        if hasattr(update, 'callback_query') and update.callback_query and update.callback_query.message:
+            await update.callback_query.message.edit_text(
+                "📱 *Главное меню*\n\nЭтот бот предназначен для проверки номеров из CSV на наличие тг\n\nВыберите действие:",
+                reply_markup=reply_markup,
+                parse_mode="Markdown"
+            )
+        else:
+            await update.message.reply_text(
+                "📱 *Главное меню*\n\nЭтот бот предназначен для проверки номеров из CSV на наличие тг\n\nВыберите действие:",
+                reply_markup=reply_markup,
+                parse_mode="Markdown"
+            )
 
     # Статические методы для сообщений с фиксированным текстом
     async def send_welcome_message(self, update: Update):

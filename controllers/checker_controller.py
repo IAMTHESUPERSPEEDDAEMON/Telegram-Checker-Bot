@@ -8,11 +8,11 @@ from views.telegram_view import TelegramView
 
 
 class CheckerController:
-    def __init__(self):
+    def __init__(self, view):
         self.checker_service = CheckerService()
         self.session_service = SessionService()
         self.user_service    = UserService()
-        self.view            = TelegramView()
+        self.view            = view
 
     async def start_processing_csv(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Сообщаем пользователю, что начинаем обработку

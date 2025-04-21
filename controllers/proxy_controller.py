@@ -6,9 +6,9 @@ from views.telegram_view import TelegramView
 from utils.admin_checker import is_admin
 
 class ProxyController:
-    def __init__(self):
+    def __init__(self, view):
         self.proxy_service = ProxyService()
-        self.view = TelegramView()
+        self.view = view
 
     async def delete_proxy_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Удаляет прокси из базы данных"""
