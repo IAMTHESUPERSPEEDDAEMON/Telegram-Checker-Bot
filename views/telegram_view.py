@@ -10,9 +10,8 @@ class TelegramView:
     # Вид главного меню
     async def show_main_menu(self, update: Update, is_admin: bool):
         """Показывает главное меню бота с кнопками"""
-        keyboard = []
         # Кнопки для всех пользователей
-        keyboard.append([InlineKeyboardButton("📋 Помощь", callback_data="help")])
+        keyboard = [[InlineKeyboardButton("📋 Помощь", callback_data="help")]]
 
         # Кнопки только для админов
         if is_admin:
@@ -39,6 +38,53 @@ class TelegramView:
                 parse_mode="Markdown"
             )
 
+    async def show_proxy_menu(self, update: Update):
+        """Показывает меню управления прокси"""
+        keyboard = [
+            [
+                InlineKeyboardButton("➕ Добавить прокси", callback_data="add_proxy"),
+                InlineKeyboardButton("✏️ Изменить прокси", callback_data="update_proxy")
+            ],
+            [
+                InlineKeyboardButton("❌ Удалить прокси", callback_data="delete_proxy"),
+                InlineKeyboardButton("🔍 Проверить прокси", callback_data="check_proxies")
+            ],
+            [InlineKeyboardButton("⬅️ Назад в главное меню", callback_data="main_menu")]
+        ]
+
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        await update.callback_query.message.edit_text(
+            "🌐 *Управление прокси*\n\nВыберите действие:",
+            reply_markup=reply_markup,
+            parse_mode="Markdown"
+        )
+
+    async def show_session_menu(self, update: Update):
+        """Показывает меню управления сессиями"""
+        keyboard = [
+            [
+                InlineKeyboardButton("➕ Добавить сессию", callback_data="add_session"),
+                InlineKeyboardButton("✏️ Изменить сессию", callback_data="update_session")
+            ],
+            [
+                InlineKeyboardButton("❌ Удалить сессию", callback_data="delete_session"),
+                InlineKeyboardButton("🔍 Проверить сессии", callback_data="check_sessions")
+            ],
+            [
+                InlineKeyboardButton("🔄 Назначить прокси сессиям", callback_data="assign_proxys_to_sessions")
+            ],
+            [InlineKeyboardButton("⬅️ Назад в главное меню", callback_data="main_menu")]
+        ]
+
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        await update.callback_query.message.edit_text(
+            "🔑 *Управление сессиями*\n\nВыберите действие:",
+            reply_markup=reply_markup,
+            parse_mode="Markdown"
+        )
+
     # Статические методы для сообщений с фиксированным текстом
     async def send_welcome_message(self, update: Update):
         """Отправляет приветственное сообщение пользователю"""
@@ -47,15 +93,18 @@ class TelegramView:
 
     async def send_help_message(self, update: Update):
         """Отправляет справочное сообщение"""
-        message = ("Доступные команды:\n"
-                   "/start - Запуск бота\n"
-                   "/help - Справка\n"
-                   "/status - Статус прокси и сессий\n"
-                   "/add_session - Добавить сессию\n"
-                   "/check_sessions - Проверить сессии\n"
-                   "/update_session - Обновить данные сессии\n"
-                   "/delete_session - Удалить сессию\n")
-        await update.message.reply_text(message)
+        keyboard = [[InlineKeyboardButton("⬅️ Назад в главное меню", callback_data="main_menu")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        await update.callback_query.message.edit_text(
+            "🔑 *Help menu*\n\nВ даном боте вы можете загрузить CSV документ для проверки номеров на наличие ТГ, "
+            "бот вернёт документ в исходном виде, но только с номерами где есть ТГ\n"
+            "\n*Формат таблицы файла: phone, name, ...*\n"
+            "\n📋*Важно чтобы первый столбец был номером*"
+            "\n\nВыберите действие:",
+            reply_markup=reply_markup,
+            parse_mode="Markdown"
+        )
 
     @staticmethod
     async def send_access_denied(update: Update):

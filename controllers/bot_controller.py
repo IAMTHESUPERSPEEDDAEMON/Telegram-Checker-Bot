@@ -53,6 +53,56 @@ class BotController:
         # Файлы
         self.app.add_handler(MessageHandler(filters.Document.FileExtension('csv'), self.checker.start_processing_csv))
 
+    async def handle_button_press(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Обрабатывает нажатия на кнопки меню"""
+        query = update.callback_query
+        await query.answer()  # Отвечаем на callback запрос
+
+        callback_data = query.data
+
+        # Обработка навигации по меню
+        if callback_data == "main_menu":
+            await self.show_main_menu(update, context)
+            return
+        elif callback_data == "proxy_menu":
+            if await is_admin(update):
+                await self.view.show_proxy_menu(update)
+            return
+        elif callback_data == "session_menu":
+            if await is_admin(update):
+                await self.view.show_session_menu(update)
+            return
+
+        # Обработка действий
+        if callback_data == "help":
+            await self.help_command(update, context)
+        elif callback_data == "status":
+            await self.status_command(update, context)
+        elif callback_data == "add_proxy":
+            print(1)
+            # await self.proxy_controller.show_add_proxy_options(update, context)
+        elif callback_data == "update_proxy":
+            print(1)
+            # await self.proxy_controller.show_update_proxy_options(update, context)
+        elif callback_data == "delete_proxy":
+            print(1)
+            # await self.proxy_controller.show_delete_proxy_options(update, context)
+        elif callback_data == "check_proxies":
+            await self.proxy_controller.check_proxies_command(update, context)
+        elif callback_data == "add_session":
+            print(1)
+            # await self.session_controller.show_add_session_options(update, context)
+        elif callback_data == "update_session":
+            print(1)
+            # await self.session_controller.show_update_session_options(update, context)
+        elif callback_data == "delete_session":
+            print(1)
+            # await self.session_controller.show_delete_session_options(update, context)
+        elif callback_data == "check_sessions":
+            await self.session_controller.check_sessions_command(update, context)
+        elif callback_data == "assign_proxys_to_sessions":
+            await self.session_controller.assign_proxies_to_sessions_command(update, context)
+
     async def show_main_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Показывает главное меню бота с кнопками"""
         await self.user_controller.save_user_data(update)
@@ -76,25 +126,6 @@ class BotController:
         # Отправляем статус
         await self.view.send_status_message(update, sessions_stats['message'], proxies_stats['message'])
 
-    async def handle_button_press(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Обрабатывает нажатия на кнопки меню"""
-        query = update.callback_query
-        await query.answer()  # Отвечаем на callback запрос
-
-        callback_data = query.data
-
-        # Обработка навигации по меню
-        if callback_data == "main_menu":
-            await self.show_main_menu(update, context)
-            return
-        elif callback_data == "proxy_menu":
-            if await is_admin(update):
-                await self.view.show_proxy_menu(update)
-            return
-        elif callback_data == "session_menu":
-            if await is_admin(update):
-                await self.view.show_session_menu(update)
-            return
 
     def run(self):
         """Запускает бота"""
