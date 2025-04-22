@@ -2,7 +2,7 @@ from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters, ConversationHandler, \
     CallbackQueryHandler
 
-from config.state_manager import StateManager
+from utils.state_manager import StateManager
 from controllers.checker_controller import CheckerController
 from controllers.message_handler_controller import MessageHandlerController
 from controllers.session_controller import SessionController
@@ -98,8 +98,7 @@ class BotController:
             print(1)
             # await self.proxy_controller.show_update_proxy_options(update, context)
         elif callback_data == "delete_proxy":
-            print(1)
-            # await self.proxy_controller.show_delete_proxy_options(update, context)
+            await self.proxy_controller.delete_proxy_options(update, context)
         elif callback_data == "check_proxies":
             await self.proxy_controller.check_proxies_command(update, context)
         elif callback_data == "add_session":

@@ -15,6 +15,14 @@ class MessageHandlerController:
         if state == "AWAITING_PROXY_INPUT":
             await self.proxy_controller.handle_proxy_input(update, context)
             self.state_manager.clear_state(user_id)
-        else:
-            await context.bot.send_message(chat_id=update.effective_chat.id,
-                                           text="Я не понял сообщение. Пожалуйста, выберите действие через меню.")
+        elif state == "AWAITING_DELETE_PROXY_INPUT":
+            await self.proxy_controller.handle_delete_proxy_input(update, context)
+            self.state_manager.clear_state(user_id)
+        elif state == "AWAITING_SESSION_INPUT":
+            await self.session_controller.handle_session_input(update, context)
+            self.state_manager.clear_state(user_id)
+        elif state == "AWAITING_CODE_INPUT_FOR_SESSION":
+            print(1)
+        elif state == "AWAITING_DELETE_SESSION_INPUT":
+            await self.session_controller.handle_delete_session_input(update, context)
+            self.state_manager.clear_state(user_id)

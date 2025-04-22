@@ -10,18 +10,9 @@ class ProxyController:
         self.view           = view
         self.state_manager  = state_manager
 
-    async def delete_proxy_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Удаляет прокси из базы данных"""
-        if not await is_admin(update):
-            return
-
-        # Проверяем аргументы команды
-        if not context.args or len(context.args) < 1:
-            await self.view.send_message(update, "Не указан ID прокси для удаления.")
-            return
-
-        proxy_id = int(context.args[0])
-        await self.view.send_result_message(update, result=await self.proxy_service.delete_by_id(proxy_id))
+    async def delete_proxy_options(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        await self.view.delete_proxy_menu(update)
+        self.state_manager.set_state(update.effective_user.id, "AWAITING_DELETE_PROXY_INPUT")
 
     async def add_proxy_options(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         await self.view.add_proxy_menu(update)
@@ -64,4 +55,10 @@ class ProxyController:
         host, port = host_port.split(":")
 
         result = await self.proxy_service.add_proxy(proxy_type, host, int(port), username, password)
+        await self.view.show_result_message(update, result)
+
+    async def handle_proxy_delete_input(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        message_text = update.message.text.strip()
+
+        result = await self.proxy_service.delete_by_id(proxy_id=message_text)
         await self.view.show_result_message(update, result)
