@@ -104,7 +104,7 @@ class TelegramView:
 
     async def add_proxy_menu(self, update: Update):
         """Показывает меню добавления сессии"""
-        keyboard = [[InlineKeyboardButton("⬅️ Назад в главное меню", callback_data="main_menu")]]
+        keyboard = [[InlineKeyboardButton("⬅️ Назад", callback_data="proxy_menu")]]
 
         reply_markup = InlineKeyboardMarkup(keyboard)
 
@@ -113,6 +113,19 @@ class TelegramView:
             "\nЧтобы добавить прокси, отправьте сообщение в формате: "
             "<code>&lt;proxy_type&gt; &lt;login:password@host:port&gt;</code>\n"
             "\nВыберите действие:",
+            reply_markup=reply_markup,
+            parse_mode="HTML"
+        )
+
+    async def delete_proxy_menu(self, update: Update):
+        """Показывает меню добавления сессии"""
+        keyboard = [[InlineKeyboardButton("⬅️ Назад", callback_data="proxy_menu")]]
+
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        await update.callback_query.message.edit_text(
+            "➕ <b>Удаление прокси</b>\n"
+            "\nЧтобы удалить прокси, отправьте в сообщении ID прокси из бд",
             reply_markup=reply_markup,
             parse_mode="HTML"
         )
