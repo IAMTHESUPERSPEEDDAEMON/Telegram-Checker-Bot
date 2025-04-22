@@ -1,7 +1,10 @@
 from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters, ConversationHandler, \
     CallbackQueryHandler
+
+from config.state_manager import StateManager
 from controllers.checker_controller import CheckerController
+from controllers.message_handler_controller import MessageHandlerController
 from controllers.session_controller import SessionController
 from controllers.proxy_controller import ProxyController
 from controllers.user_controller import UserController
@@ -15,16 +18,22 @@ logger = Logger()
 
 class BotController:
     def __init__(self):
-        self.view = TelegramView()
-        self.checker = CheckerController(self.view)
-        self.session_controller = SessionController(self.view)
-        self.proxy_controller = ProxyController(self.view)
+        self.state_manager = StateManager()
+        self.view = TelegramView(self.state_manager)
+        self.checker = CheckerController(self.view, self.state_manager)
+        self.session_controller = SessionController(self.view, self.state_manager)
+        self.proxy_controller = ProxyController(self.view, self.state_manager)
         self.user_controller = UserController(self.view)
 
         # Создаем приложение
         self.app = ApplicationBuilder().token(BOT_TOKEN).build()
 
         # Регистрируем обработчики
+        self.message_handler_controller = MessageHandlerController(
+            self.state_manager,
+            self.proxy_controller,
+            self.session_controller
+        )
         self._register_handlers()
 
     def _register_handlers(self):
@@ -36,6 +45,11 @@ class BotController:
 
         # Общий обработчик для всех кнопок
         self.app.add_handler(CallbackQueryHandler(self.handle_button_press))
+
+        # Обработчик сообщений
+        self.app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.message_handler_controller.handle))
+        # Файл CSV
+        self.app.add_handler(MessageHandler(filters.Document.FileExtension('csv'), self.checker.start_processing_csv))
 
         # Регистрация обработчика беседы для добавления сессии
         add_session_conv = ConversationHandler(
@@ -79,8 +93,7 @@ class BotController:
         elif callback_data == "status":
             await self.status_command(update, context)
         elif callback_data == "add_proxy":
-            print(1)
-            # await self.proxy_controller.show_add_proxy_options(update, context)
+            await self.proxy_controller.add_proxy_options(update, context)
         elif callback_data == "update_proxy":
             print(1)
             # await self.proxy_controller.show_update_proxy_options(update, context)
@@ -124,7 +137,7 @@ class BotController:
         proxies_stats = await self.proxy_controller.get_proxies_stats()
 
         # Отправляем статус
-        await self.view.send_status_message(update, sessions_stats['message'], proxies_stats['message'])
+        await self.view.show_status_results_menu(update, sessions_stats['message'], proxies_stats['message'])
 
 
     def run(self):

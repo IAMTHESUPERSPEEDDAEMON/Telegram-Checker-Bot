@@ -37,3 +37,4 @@ for directory in [LOG_DIR, STORAGE_DIR, SESSIONS_DIR, TEMP_DIR]:
 # Состояния для ConversationHandler
 WAITING_FOR_CODE = 1
 WAITING_FOR_PASSWORD = 2
+

@@ -13,9 +13,10 @@ session_data = {}
 
 
 class SessionController:
-    def __init__(self, view):
+    def __init__(self, view, state_manager):
         self.session_service = SessionService()
         self.view = view
+        self.state_manager = state_manager
 
     async def delete_session_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Удаляет сессию из базы данных"""

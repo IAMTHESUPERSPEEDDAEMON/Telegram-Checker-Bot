@@ -6,7 +6,7 @@ from services.user_service import UserService
 class UserController:
     def __init__(self, view):
         self.user_service = UserService()
-        self.view = view
+        self.view         = view
 
     async def save_user_data(self, update: Update):
         """Обрабатывает команду /start"""

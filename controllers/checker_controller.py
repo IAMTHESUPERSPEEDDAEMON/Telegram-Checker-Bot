@@ -7,11 +7,12 @@ from services.user_service import UserService
 
 
 class CheckerController:
-    def __init__(self, view):
+    def __init__(self, view, state_manager):
         self.checker_service = CheckerService()
         self.session_service = SessionService()
         self.user_service    = UserService()
         self.view            = view
+        self.state_manager   = state_manager
 
     async def start_processing_csv(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Сообщаем пользователю, что начинаем обработку

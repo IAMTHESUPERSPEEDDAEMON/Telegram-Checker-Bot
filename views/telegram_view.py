@@ -7,6 +7,8 @@ class TelegramView:
     Класс для отображения сообщений в Telegram.
     Не содержит бизнес-логики, только методы для формирования интерфейса бота
     """
+    def __init__(self, state_manager):
+        self.state_manager = state_manager
     # Вид главного меню
     async def show_main_menu(self, update: Update, is_admin: bool):
         """Показывает главное меню бота с кнопками"""
@@ -85,12 +87,6 @@ class TelegramView:
             parse_mode="Markdown"
         )
 
-    # Статические методы для сообщений с фиксированным текстом
-    async def send_welcome_message(self, update: Update):
-        """Отправляет приветственное сообщение пользователю"""
-        message = "Привет! Я бот для проверки номеров в Telegram. Используйте /help для просмотра команд."
-        await update.message.reply_text(message)
-
     async def send_help_message(self, update: Update):
         """Отправляет справочное сообщение"""
         keyboard = [[InlineKeyboardButton("⬅️ Назад в главное меню", callback_data="main_menu")]]
@@ -106,10 +102,54 @@ class TelegramView:
             parse_mode="Markdown"
         )
 
-    @staticmethod
-    async def send_access_denied(update: Update):
-        """Отправляет сообщение об отказе в доступе"""
-        await update.message.reply_text("⛔ У вас нет прав для выполнения этой команды.")
+    async def add_proxy_menu(self, update: Update):
+        """Показывает меню добавления сессии"""
+        keyboard = [[InlineKeyboardButton("⬅️ Назад в главное меню", callback_data="main_menu")]]
+
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        await update.callback_query.message.edit_text(
+            "➕ <b>Добавление прокси</b>\n"
+            "\nЧтобы добавить прокси, отправьте сообщение в формате: "
+            "<code>&lt;proxy_type&gt; &lt;login:password@host:port&gt;</code>\n"
+            "\nВыберите действие:",
+            reply_markup=reply_markup,
+            parse_mode="HTML"
+        )
+
+    async def show_result_message(self, update: Update, result: dict):
+        """Отправляет результат операции на основе словаря с ключами status и message"""
+        text = ''
+        keyboard = [[InlineKeyboardButton("⬅️ Назад в главное меню", callback_data="main_menu")]]
+
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        if result['status'] == 'success':
+            text = f"✅ {result['message']}"
+        else:
+            text = f"❌ Ошибка: {result['message']}"
+
+        await update.callback_query.message.edit_text(
+            "➕ <b>Результат выполнения:<b>\n"
+            f"\n{text}\n"
+            "\nВыберите действие:",
+            reply_markup=reply_markup,
+            parse_mode="HTML"
+        )
+
+    async def show_status_results_menu(self, update: Update, sessions_status: str, proxies_status: str):
+        """Отправляет сообщение со статусом сессий и прокси"""
+        keyboard = [[InlineKeyboardButton("⬅️ Назад в главное меню", callback_data="main_menu")]]
+
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        await update.callback_query.message.edit_text(
+            "➕ *Статус сессий и прокси:*\n"
+            f"\nСтатус сессий: {sessions_status}\nСтатус прокси: {proxies_status} \n"
+            "\nВыберите действие:",
+            reply_markup=reply_markup,
+            parse_mode="Markdown"
+        )
 
     # Методы для динамического контента
     async def send_message(self, update: Update, message: str):
@@ -124,12 +164,6 @@ class TelegramView:
             await update.message.reply_text(f"✅ {result['message']}")
         else:
             await update.message.reply_text(f"❌ Ошибка: {result['message']}")
-
-    async def send_status_message(self, update: Update, sessions_status: str,
-                                  proxies_status: str):
-        """Отправляет сообщение со статусом сессий и прокси"""
-        message = f"Статус сессий: {sessions_status}\nСтатус прокси: {proxies_status}"
-        await update.message.reply_text(message)
 
     async def send_document(self, update: Update, context: ContextTypes.DEFAULT_TYPE, file_path: str, caption: str):
         """Отправляет файл пользователю"""
