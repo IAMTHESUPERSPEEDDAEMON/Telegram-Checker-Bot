@@ -279,15 +279,6 @@ class TelegramView:
         """Отправляет обычное текстовое сообщение"""
         await update.message.reply_text(message)
 
-    async def send_result_message(self, update: Update, result: dict):
-        """
-        Отправляет результат операции на основе словаря с ключами status и message
-        """
-        if result['status'] == 'success':
-            await update.message.reply_text(f"✅ {result['message']}")
-        else:
-            await update.message.reply_text(f"❌ Ошибка: {result['message']}")
-
     async def send_document(self, update: Update, context: ContextTypes.DEFAULT_TYPE, file_path: str, caption: str):
         """Отправляет файл пользователю"""
         with open(file_path, 'rb') as file:

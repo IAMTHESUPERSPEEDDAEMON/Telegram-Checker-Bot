@@ -1,11 +1,8 @@
 import asyncio
-import json
 from telegram import Update
-from telegram.ext import ContextTypes, ConversationHandler
-from config.config import WAITING_FOR_CODE, WAITING_FOR_PASSWORD
+from telegram.ext import ContextTypes
 from services.session_service import SessionService
 from utils.logger import Logger
-from utils.admin_checker import is_admin
 
 logger = Logger()
 
@@ -25,25 +22,18 @@ class SessionController:
         await self.view.delete_session_menu(update, context)
         self.state_manager.set_state(update.effective_user.id, "AWAITING_DELETE_SESSION_INPUT")
 
-    async def check_sessions_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Обрабатывает команду /check_sessions - проверяет работоспособность сессий"""
-        # Проверяем, является ли пользователь администратором
-        if not await is_admin(update):
-            return
-
-        await self.view.send_message(update, "Начинаем проверку сессий...")
-        await self.view.send_result_message(update, await self.session_service.check_all_sessions())
-
-    #TODO: подумать над применением
     async def update_session_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         await self.view.update_session_menu(update, context)
         self.state_manager.set_state(update.effective_user.id, "AWAITING_SESSION_UPDATE_INPUT")
 
+    async def check_sessions_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        result = await self.session_service.check_all_sessions()
+        await self.view.show_result_message(update, result)
+
     async def assign_proxies_to_sessions_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Присваивает прокси к сессиям."""
-        if not await is_admin(update):
-            return
-        await self.view.send_result_message(update, await self.session_service.assign_proxies_to_sessions())
+        result = await self.session_service.assign_proxies_to_sessions()
+        await self.view.show_result_message(update, result)
 
     async def get_sessions_stats(self):
         """Получить статистику по сессиям"""
@@ -113,7 +103,7 @@ class SessionController:
                 await update.effective_chat.delete_message(last_menu_id)
             except Exception as e:
                 print(f"Ошибка при удалении старого меню: {e}")
-        await self.view.send_result_message(update, result)
+        await self.view.show_result_message(update, result)
         self.state_manager.clear_state(user_id)
         self._session_data.pop(user_id, None)
 

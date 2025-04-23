@@ -10,7 +10,7 @@ from controllers.proxy_controller import ProxyController
 from controllers.user_controller import UserController
 from utils.logger import Logger
 from views.telegram_view import TelegramView
-from config.config import BOT_TOKEN, WAITING_FOR_CODE, WAITING_FOR_PASSWORD
+from config.config import BOT_TOKEN
 from utils.admin_checker import is_admin
 
 logger = Logger()
@@ -88,12 +88,9 @@ class BotController:
             # TODO: проверить добавление сессии и сделать возможность отменить процесс
             await self.session_controller.add_session_command(update, context)
         elif callback_data == "update_session":
-            # TODO: доделать реализацию
             await self.session_controller.update_session_command(update, context)
         elif callback_data == "delete_session":
-            # TODO: доделать реализацию
-            print(1)
-            # await self.session_controller.show_delete_session_command(update, context)
+            await self.session_controller.delete_session_command(update, context)
         elif callback_data == "check_sessions":
             # TODO: проверить работу
             await self.session_controller.check_sessions_command(update, context)
