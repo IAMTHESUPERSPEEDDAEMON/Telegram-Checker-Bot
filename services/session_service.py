@@ -47,13 +47,13 @@ class SessionService:
                         'message': f'Ошибка добавления сессии для телефона {phone}.\n{session_id}'}
 
 
-    async def update_session(self, session_id, new_params):
+    async def update_session(self, session_id, phone, api_id, api_hash):
         """Обновляет детали сессии"""
         is_exists = await self.session_model.get_session_by_id(session_id)
         if is_exists is None:
             return {'status': 'error', 'message': f'Сессия {session_id} не была найдена'}
         else:
-            updated_session = await self.session_model.update_session(session_id, None, new_params['api_id'], new_params['api_hash'], None)
+            updated_session = await self.session_model.update_session(session_id, phone, api_id, api_hash, None)
 
             if updated_session:
                 return {'status': 'success', 'message': f'Сессия {session_id} успешно обновлена.'}

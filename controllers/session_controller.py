@@ -36,20 +36,8 @@ class SessionController:
 
     #TODO: подумать над применением
     async def update_session_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Обновляет данные сессии."""
-        if not await is_admin(update):
-            return
-
-        if not context.args or len(context.args) < 2:
-            await self.view.send_message(
-                update,
-                "Использование: /update_session <session_id> <новые параметры в формате JSON>"
-            )
-            return
-
-        session_id = int(context.args[0])
-        result = await self.session_service.update_session(session_id, json.loads(''.join(context.args[1:])))
-        await self.view.send_result_message(update, result)
+        await self.view.update_session_menu(update, context)
+        self.state_manager.set_state(update.effective_user.id, "AWAITING_SESSION_UPDATE_INPUT")
 
     async def assign_proxies_to_sessions_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Присваивает прокси к сессиям."""
@@ -133,5 +121,12 @@ class SessionController:
         message_text = update.message.text.strip()
 
         result = await self.session_service.delete_session_by_id(session_id=message_text)
+        await self.view.show_result_message(update, result)
+
+    async def handle_session_update_input(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        message_text = update.message.text.strip()
+        parts = message_text.split()
+        session_id, phone, api_id, api_hash = parts[:4]
+        result = await self.session_service.update_session(session_id=session_id, phone=phone, api_id=int(api_id), api_hash=api_hash)
         await self.view.show_result_message(update, result)
 

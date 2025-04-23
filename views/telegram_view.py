@@ -215,6 +215,20 @@ class TelegramView:
                 parse_mode="HTML"
             )
 
+    async def show_update_session_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Меню для обновления сессии"""
+        keyboard = [[InlineKeyboardButton("⬅️ Назад", callback_data="session_menu")]]
+
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        sent = await update.callback_query.message.edit_text(
+            "➕ <b>Обновление сессии</b>\n"
+            "\n<code>&lt;id&gt; &lt;phone&gt; &lt;api_id&gt; &lt;api_hash&gt;</code>\n",
+            reply_markup=reply_markup,
+            parse_mode="HTML"
+        )
+        context.user_data["last_menu_message_id"] = sent.message_id
+
     async def show_result_message(self, update: Update, result: dict):
         """Отправляет результат операции на основе словаря с ключами status и message"""
         text = ''
@@ -278,18 +292,6 @@ class TelegramView:
         """Отправляет файл пользователю"""
         with open(file_path, 'rb') as file:
             await context.bot.send_document(chat_id=update.effective_chat.id, document=file, caption=caption)
-
-    async def send_code_request(self, chat_id, context, phone):
-        """Отправляет запрос кода подтверждения пользователю"""
-        message = f"📱 Введите код подтверждения для номера {phone}:"
-        sent_msg = await context.bot.send_message(chat_id=chat_id, text=message)
-        return sent_msg.message_id
-
-    async def send_password_request(self, chat_id, context, phone):
-        """Отправляет запрос пароля двухфакторной аутентификации"""
-        message = f"🔐 Введите пароль двухфакторной аутентификации для номера {phone}:"
-        sent_msg = await context.bot.send_message(chat_id=chat_id, text=message)
-        return sent_msg.message_id
 
     async def send_start_csv_process(self, update: Update):
         """Отправляет сообщение о начале обработки CSV файла"""

@@ -89,8 +89,7 @@ class BotController:
             await self.session_controller.add_session_command(update, context)
         elif callback_data == "update_session":
             # TODO: доделать реализацию
-            print(1)
-            # await self.session_controller.update_session_command(update, context)
+            await self.session_controller.update_session_command(update, context)
         elif callback_data == "delete_session":
             # TODO: доделать реализацию
             print(1)
