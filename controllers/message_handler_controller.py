@@ -16,16 +16,17 @@ class MessageHandlerController:
             await self.proxy_controller.handle_proxy_input(update, context)
             self.state_manager.clear_state(user_id)
         elif state == "AWAITING_DELETE_PROXY_INPUT":
-            await self.proxy_controller.handle_delete_proxy_input(update, context)
+            await self.proxy_controller.handle_proxy_delete_input(update, context)
             self.state_manager.clear_state(user_id)
         elif state == "AWAITING_PROXY_UPDATE_INPUT":
             await self.proxy_controller.handle_proxy_update_input(update, context)
             self.state_manager.clear_state(user_id)
         elif state == "AWAITING_SESSION_INPUT":
             await self.session_controller.handle_session_input(update, context)
-            self.state_manager.clear_state(user_id)
         elif state == "AWAITING_CODE_INPUT_FOR_SESSION":
-            print(1)
+            await self.session_controller.handle_code_input(update, context)
+        elif state == "AWAITING_2FA_INPUT_FOR_SESSION":
+            await self.session_controller.handle_2fa_input(update, context)
         elif state == "AWAITING_DELETE_SESSION_INPUT":
             await self.session_controller.handle_delete_session_input(update, context)
             self.state_manager.clear_state(user_id)

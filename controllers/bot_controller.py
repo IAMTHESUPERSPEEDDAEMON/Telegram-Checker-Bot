@@ -51,22 +51,6 @@ class BotController:
         # Файл CSV
         self.app.add_handler(MessageHandler(filters.Document.FileExtension('csv'), self.checker.start_processing_csv))
 
-        # Регистрация обработчика беседы для добавления сессии
-        add_session_conv = ConversationHandler(
-            entry_points=[CommandHandler('add_session', self.session_controller.start_add_session)],
-            states={
-                WAITING_FOR_CODE: [
-                    MessageHandler(filters.TEXT & ~filters.COMMAND, self.session_controller.process_code)],
-                WAITING_FOR_PASSWORD: [
-                    MessageHandler(filters.TEXT & ~filters.COMMAND, self.session_controller.process_password)]
-            },
-            fallbacks=[CommandHandler('cancel', self.session_controller.cancel_add_session)]
-        )
-        self.app.add_handler(add_session_conv)
-
-        # Файлы
-        self.app.add_handler(MessageHandler(filters.Document.FileExtension('csv'), self.checker.start_processing_csv))
-
     async def handle_button_press(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обрабатывает нажатия на кнопки меню"""
         query = update.callback_query
@@ -93,25 +77,29 @@ class BotController:
         elif callback_data == "status":
             await self.status_command(update, context)
         elif callback_data == "add_proxy":
-            await self.proxy_controller.add_proxy_options(update, context)
+            await self.proxy_controller.add_proxy_command(update, context)
         elif callback_data == "update_proxy":
-            await self.proxy_controller.update_proxy_options(update, context)
+            await self.proxy_controller.update_proxy_command(update, context)
         elif callback_data == "delete_proxy":
-            await self.proxy_controller.delete_proxy_options(update, context)
+            await self.proxy_controller.delete_proxy_command(update, context)
         elif callback_data == "check_proxies":
             await self.proxy_controller.check_proxies_command(update, context)
         elif callback_data == "add_session":
-            print(1)
-            # await self.session_controller.show_add_session_options(update, context)
+            # TODO: проверить добавление сессии и сделать возможность отменить процесс
+            await self.session_controller.add_session_command(update, context)
         elif callback_data == "update_session":
+            # TODO: доделать реализацию
             print(1)
-            # await self.session_controller.show_update_session_options(update, context)
+            # await self.session_controller.update_session_command(update, context)
         elif callback_data == "delete_session":
+            # TODO: доделать реализацию
             print(1)
-            # await self.session_controller.show_delete_session_options(update, context)
+            # await self.session_controller.show_delete_session_command(update, context)
         elif callback_data == "check_sessions":
+            # TODO: проверить работу
             await self.session_controller.check_sessions_command(update, context)
         elif callback_data == "assign_proxys_to_sessions":
+            # TODO: проверить работу
             await self.session_controller.assign_proxies_to_sessions_command(update, context)
 
     async def show_main_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE):

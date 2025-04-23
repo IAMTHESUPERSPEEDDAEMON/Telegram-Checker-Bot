@@ -37,7 +37,9 @@ class TelegramView:
             )
         else:
             await update.message.reply_text(
-                "📱 *Главное меню*\n\nЭтот бот предназначен для проверки номеров из CSV на наличие тг\n\nВыберите действие:",
+                "📱 *Главное меню*\n\nЭтот бот предназначен для проверки номеров из CSV на наличие тг\n"
+                "\nЧтобы начать, отправь файл с номерами в формате CSV, подробности можно узнать в меню 'Помощь'\n"
+                "\nВыберите действие:",
                 reply_markup=reply_markup,
                 parse_mode="Markdown"
             )
@@ -104,13 +106,13 @@ class TelegramView:
             parse_mode="Markdown"
         )
 
-    async def add_proxy_menu(self, update: Update):
-        """Показывает меню добавления сессии"""
+    async def add_proxy_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Показывает меню добавления прокси"""
         keyboard = [[InlineKeyboardButton("⬅️ Назад", callback_data="proxy_menu")]]
 
         reply_markup = InlineKeyboardMarkup(keyboard)
 
-        await update.callback_query.message.edit_text(
+        sent = await update.callback_query.message.edit_text(
             "➕ <b>Добавление прокси</b>\n"
             "\nЧтобы добавить прокси, отправьте сообщение в формате: "
             "<code>&lt;proxy_type&gt; &lt;login:password@host:port&gt;</code>\n"
@@ -118,19 +120,21 @@ class TelegramView:
             reply_markup=reply_markup,
             parse_mode="HTML"
         )
+        context.user_data["last_menu_message_id"] = sent.message_id
 
-    async def delete_proxy_menu(self, update: Update):
+    async def delete_proxy_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Показывает меню удаления сессии"""
         keyboard = [[InlineKeyboardButton("⬅️ Назад", callback_data="proxy_menu")]]
 
         reply_markup = InlineKeyboardMarkup(keyboard)
 
-        await update.callback_query.message.edit_text(
+        sent = await update.callback_query.message.edit_text(
             "➕ <b>Удаление прокси</b>\n"
             "\nЧтобы удалить прокси, отправьте в сообщении ID прокси из бд",
             reply_markup=reply_markup,
             parse_mode="HTML"
         )
+        context.user_data["last_menu_message_id"] = sent.message_id
 
     async def proxy_stats_menu(self, update: Update):
         """Показывает меню статистики по прокси"""
@@ -147,11 +151,74 @@ class TelegramView:
             parse_mode="HTML"
         )
 
+    async def add_session_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Показывает меню добавления сессии"""
+        keyboard = [[InlineKeyboardButton("⬅️ Назад", callback_data="session_menu")]]
+
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        sent = await update.callback_query.message.edit_text(
+            "➕ <b>Добавление сессии</b>\n"
+            "\nЧтобы добавить сессию, отправьте сообщение в формате: "
+            "<code>&lt;phone&gt; &lt;api_id&gt; &lt;api_hash&gt;</code>\n"
+            "\nВыберите действие:",
+            reply_markup=reply_markup,
+            parse_mode="HTML"
+        )
+        context.user_data["last_menu_message_id"] = sent.message_id
+
+    async def delete_session_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Показывает меню удаления сессии"""
+        keyboard = [[InlineKeyboardButton("⬅️ Назад", callback_data="session_menu")]]
+
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        sent = await update.callback_query.message.edit_text(
+            "➕ <b>Удаление сессии</b>\n"
+            "\nЧтобы удалить сессию, отправьте в сообщении ID сессии из бд",
+            reply_markup=reply_markup,
+            parse_mode="HTML"
+        )
+        context.user_data["last_menu_message_id"] = sent.message_id
+
+    async def show_get_session_code_menu(self, update: Update, phone):
+        """Показывает меню с запросом кода"""
+        text = ''
+        keyboard = [[InlineKeyboardButton("⬅️ Назад", callback_data="session_menu")]]
+
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        if self.state_manager.has_state(update.effective_user.id, "AWAITING_CODE_INPUT_FOR_SESSION"):
+            text = f"\nВведите полученный код для номера {phone}:"
+        elif self.state_manager.has_state(update.effective_user.id, "AWAITING_2FA_INPUT_FOR_SESSION"):
+            text = f"\nВведите код 2FA для номера {phone}:"
+
+        # Удаляем сообщение пользователя (если оно есть)
+        if update.message:
+            try:
+                await update.message.delete()
+            except Exception as e:
+                print(f"Ошибка при удалении сообщения: {e}")
+
+        if hasattr(update, 'callback_query') and update.callback_query and update.callback_query.message:
+            await update.callback_query.message.edit_text(
+                "➕ <b>Код сессии</b>\n"
+                f"\n{text}",
+                reply_markup=reply_markup,
+                parse_mode="HTML"
+            )
+        else:
+            await update.effective_chat.send_message(
+                "➕ <b>Код сессии</b>\n"
+                f"\n{text}",
+                reply_markup=reply_markup,
+                parse_mode="HTML"
+            )
+
     async def show_result_message(self, update: Update, result: dict):
         """Отправляет результат операции на основе словаря с ключами status и message"""
         text = ''
         keyboard = [[InlineKeyboardButton("⬅️ Назад в главное меню", callback_data="main_menu")]]
-
         reply_markup = InlineKeyboardMarkup(keyboard)
 
         if result['status'] == 'success':
@@ -159,10 +226,22 @@ class TelegramView:
         else:
             text = f"❌ Ошибка: {result['message']}"
 
-        await update.callback_query.message.edit_text(
-            "➕ <b>Результат выполнения:<b>\n"
+        message_text = (
+            "➕ <b>Результат выполнения:</b>\n"
             f"\n{text}\n"
-            "\nВыберите действие:",
+            "\nВыберите действие:"
+        )
+
+        # Удаляем сообщение пользователя (если оно есть)
+        if update.message:
+            try:
+                await update.message.delete()
+            except Exception as e:
+                print(f"Ошибка при удалении сообщения: {e}")
+
+        # Отправляем новое сообщение с результатом
+        await update.effective_chat.send_message(
+            message_text,
             reply_markup=reply_markup,
             parse_mode="HTML"
         )

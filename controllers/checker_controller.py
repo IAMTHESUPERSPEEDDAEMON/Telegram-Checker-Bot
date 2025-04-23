@@ -5,7 +5,7 @@ from services.checker_service import CheckerService
 from services.session_service import SessionService
 from services.user_service import UserService
 
-
+# TODO: переделать под меню как прочие классы и проверить
 class CheckerController:
     def __init__(self, view, state_manager):
         self.checker_service = CheckerService()
