@@ -18,6 +18,9 @@ class MessageHandlerController:
         elif state == "AWAITING_DELETE_PROXY_INPUT":
             await self.proxy_controller.handle_delete_proxy_input(update, context)
             self.state_manager.clear_state(user_id)
+        elif state == "AWAITING_PROXY_UPDATE_INPUT":
+            await self.proxy_controller.handle_proxy_update_input(update, context)
+            self.state_manager.clear_state(user_id)
         elif state == "AWAITING_SESSION_INPUT":
             await self.session_controller.handle_session_input(update, context)
             self.state_manager.clear_state(user_id)

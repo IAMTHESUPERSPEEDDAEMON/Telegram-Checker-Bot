@@ -18,29 +18,13 @@ class ProxyController:
         await self.view.add_proxy_menu(update)
         self.state_manager.set_state(update.effective_user.id, "AWAITING_PROXY_INPUT")
 
-    async def update_proxy_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Обновляет данные прокси."""
-        if not await is_admin(update):
-            return
-
-        if not context.args or len(context.args) < 4:
-            await self.view.send_message(
-                update,
-                "Использование: /update_proxy <proxy_id> <тип> <хост> <порт> [имя пользователя] [пароль]"
-            )
-            return
-
-        proxy_id = int(context.args[0])
-        await self.view.send_result_message(update, await self.proxy_service.update_proxy(proxy_id, context.args))
+    async def update_proxy_options(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        await self.view.add_proxy_menu(update)
+        self.state_manager.set_state(update.effective_user.id, "AWAITING_PROXY_UPDATE_INPUT")
 
     async def check_proxies_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Обрабатывает команду /check_proxies - проверяет работоспособность прокси"""
-        # Проверяем, является ли пользователь администратором
-        if not await is_admin(update):
-            return
-
-        await self.view.send_message(update, "Начинаем проверку прокси...")
-        await self.view.send_result_message(update, await self.proxy_service.check_all_proxies())
+        await self.view.proxy_stats_menu(update)
+        await self.view.show_result_message(update, await self.proxy_service.check_all_proxies())
 
     async def get_proxies_stats(self):
         """Получет стату по прокси"""
@@ -61,4 +45,12 @@ class ProxyController:
         message_text = update.message.text.strip()
 
         result = await self.proxy_service.delete_by_id(proxy_id=message_text)
+        await self.view.show_result_message(update, result)
+
+    async def handle_proxy_update_input(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        message_text = update.message.text.strip()
+
+        proxy_id, credentials = message_text.split(maxsplit=1)
+
+        result = await self.proxy_service.update_proxy(proxy_id, credentials)
         await self.view.show_result_message(update, result)

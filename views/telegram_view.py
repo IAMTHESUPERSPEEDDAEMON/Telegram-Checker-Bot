@@ -120,7 +120,7 @@ class TelegramView:
         )
 
     async def delete_proxy_menu(self, update: Update):
-        """Показывает меню добавления сессии"""
+        """Показывает меню удаления сессии"""
         keyboard = [[InlineKeyboardButton("⬅️ Назад", callback_data="proxy_menu")]]
 
         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -128,6 +128,21 @@ class TelegramView:
         await update.callback_query.message.edit_text(
             "➕ <b>Удаление прокси</b>\n"
             "\nЧтобы удалить прокси, отправьте в сообщении ID прокси из бд",
+            reply_markup=reply_markup,
+            parse_mode="HTML"
+        )
+
+    async def proxy_stats_menu(self, update: Update):
+        """Показывает меню статистики по прокси"""
+        keyboard = [[InlineKeyboardButton("⬅️ Назад", callback_data="proxy_menu")]]
+
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        await update.callback_query.message.edit_text(
+            "➕ <b>Статистика прокси</b>\n"
+            "\nЧтобы изменить прокси, отправьте сообщение в формате: "
+            "<code>&lt;proxy_ID&gt; &lt;login:password@host:port&gt;</code>\n"
+            "\nГде proxy_ID взят из бд",
             reply_markup=reply_markup,
             parse_mode="HTML"
         )

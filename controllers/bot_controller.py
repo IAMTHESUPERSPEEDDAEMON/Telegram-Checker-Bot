@@ -95,8 +95,7 @@ class BotController:
         elif callback_data == "add_proxy":
             await self.proxy_controller.add_proxy_options(update, context)
         elif callback_data == "update_proxy":
-            print(1)
-            # await self.proxy_controller.show_update_proxy_options(update, context)
+            await self.proxy_controller.update_proxy_options(update, context)
         elif callback_data == "delete_proxy":
             await self.proxy_controller.delete_proxy_options(update, context)
         elif callback_data == "check_proxies":

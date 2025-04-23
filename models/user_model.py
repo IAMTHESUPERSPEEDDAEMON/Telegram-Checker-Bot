@@ -76,7 +76,11 @@ class UserModel:
         try:
             result = self.db.execute_query(query, params)
             logger.info(f"Пытаюсь получить юзера: {telegram_id} из бд")
-            return result[0]
+            if result:
+                return result[0]
+            else:
+                logger.warning(f"Пользователь с telegram_id {telegram_id} не найден.")
+                return None
         except Exception as e:
             logger.error(f"Error when getting user {telegram_id} details: {e}")
             return None
