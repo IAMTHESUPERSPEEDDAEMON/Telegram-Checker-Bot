@@ -1,6 +1,5 @@
 from telegram import Update
-from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters, ConversationHandler, \
-    CallbackQueryHandler
+from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters, CallbackQueryHandler
 
 from utils.state_manager import StateManager
 from controllers.checker_controller import CheckerController
@@ -92,7 +91,6 @@ class BotController:
         elif callback_data == "delete_session":
             await self.session_controller.delete_session_command(update, context)
         elif callback_data == "check_sessions":
-            # TODO: проверить работу
             await self.session_controller.check_sessions_command(update, context)
         elif callback_data == "assign_proxys_to_sessions":
             # TODO: проверить работу
