@@ -10,7 +10,7 @@ class TelegramView:
     def __init__(self, state_manager):
         self.state_manager = state_manager
     # Вид главного меню
-    async def show_main_menu(self, update: Update, is_admin: bool):
+    async def show_main_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE, is_admin: bool):
         """Показывает главное меню бота с кнопками"""
         # Кнопки для всех пользователей
         keyboard = [[InlineKeyboardButton("📋 Помощь", callback_data="help")]]
@@ -28,7 +28,7 @@ class TelegramView:
         reply_markup = InlineKeyboardMarkup(keyboard)
 
         if hasattr(update, 'callback_query') and update.callback_query and update.callback_query.message:
-            await update.callback_query.message.edit_text(
+            sent = await update.callback_query.message.edit_text(
                 "📱 *Главное меню*\n\nЭтот бот предназначен для проверки номеров из CSV на наличие тг\n"
                 "\nЧтобы начать, отправь файл с номерами в формате CSV, подробности можно узнать в меню 'Помощь'\n"
                 "\nВыберите действие:",
@@ -36,15 +36,16 @@ class TelegramView:
                 parse_mode="Markdown"
             )
         else:
-            await update.message.reply_text(
+            sent = await update.message.reply_text(
                 "📱 *Главное меню*\n\nЭтот бот предназначен для проверки номеров из CSV на наличие тг\n"
                 "\nЧтобы начать, отправь файл с номерами в формате CSV, подробности можно узнать в меню 'Помощь'\n"
                 "\nВыберите действие:",
                 reply_markup=reply_markup,
                 parse_mode="Markdown"
             )
+        context.user_data["last_menu_message_id"] = sent.message_id
 
-    async def show_proxy_menu(self, update: Update):
+    async def show_proxy_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Показывает меню управления прокси"""
         keyboard = [
             [
@@ -60,13 +61,14 @@ class TelegramView:
 
         reply_markup = InlineKeyboardMarkup(keyboard)
 
-        await update.callback_query.message.edit_text(
+        sent = await update.callback_query.message.edit_text(
             "🌐 *Управление прокси*\n\nВыберите действие:",
             reply_markup=reply_markup,
             parse_mode="Markdown"
         )
+        context.user_data["last_menu_message_id"] = sent.message_id
 
-    async def show_session_menu(self, update: Update):
+    async def show_session_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Показывает меню управления сессиями"""
         keyboard = [
             [
@@ -85,11 +87,12 @@ class TelegramView:
 
         reply_markup = InlineKeyboardMarkup(keyboard)
 
-        await update.callback_query.message.edit_text(
+        sent = await update.callback_query.message.edit_text(
             "🔑 *Управление сессиями*\n\nВыберите действие:",
             reply_markup=reply_markup,
             parse_mode="Markdown"
         )
+        context.user_data["last_menu_message_id"] = sent.message_id
 
     async def send_help_message(self, update: Update):
         """Отправляет справочное сообщение"""
@@ -260,31 +263,64 @@ class TelegramView:
             parse_mode="HTML"
         )
 
-    async def show_status_results_menu(self, update: Update, sessions_status: str, proxies_status: str):
+    async def show_status_results_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE, sessions_status: str, proxies_status: str):
         """Отправляет сообщение со статусом сессий и прокси"""
         keyboard = [[InlineKeyboardButton("⬅️ Назад в главное меню", callback_data="main_menu")]]
 
         reply_markup = InlineKeyboardMarkup(keyboard)
 
-        await update.callback_query.message.edit_text(
+        sent = await update.callback_query.message.edit_text(
             "➕ *Статус сессий и прокси:*\n"
             f"\nСтатус сессий: {sessions_status}\nСтатус прокси: {proxies_status} \n"
             "\nВыберите действие:",
             reply_markup=reply_markup,
             parse_mode="Markdown"
         )
+        context.user_data["last_menu_message_id"] = sent.message_id
 
-    # Методы для динамического контента
-    async def send_message(self, update: Update, message: str):
-        """Отправляет обычное текстовое сообщение"""
-        await update.message.reply_text(message)
+    async def show_start_process_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE, stat):
+        text = ''
+        keyboard = [[InlineKeyboardButton("⬅️ Назад в главное меню", callback_data="main_menu")]]
 
-    async def send_document(self, update: Update, context: ContextTypes.DEFAULT_TYPE, file_path: str, caption: str):
-        """Отправляет файл пользователю"""
-        with open(file_path, 'rb') as file:
-            await context.bot.send_document(chat_id=update.effective_chat.id, document=file, caption=caption)
+        reply_markup = InlineKeyboardMarkup(keyboard)
 
-    async def send_start_csv_process(self, update: Update):
-        """Отправляет сообщение о начале обработки CSV файла"""
-        message = f"Начинаю обработку файла {update.message.document.file_name}. Это может занять некоторое время..."
-        await update.message.reply_text(message)
+        if stat == 1:
+            text = "\nНачинаю проверку файла"
+        else:
+            text = "\nОшибка при обработке файла, проверьте правильность формата"
+
+        sent = await update.effective_chat.send_message(
+            "➕ *Статус обработки СSV:*\n"
+            f"{text}",
+            parse_mode="Markdown"
+        )
+        context.user_data["last_menu_message_id"] = sent.message_id
+
+    async def show_csv_checker_processing_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE, overall, current):
+        """Меню чекера CSV"""
+        keyboard = [[InlineKeyboardButton("⬅️ Назад в главное меню", callback_data="main_menu")]]
+
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        # Удаляем сообщение пользователя (если оно есть)
+        if update.message:
+            try:
+                await update.message.delete()
+            except Exception as e:
+                print(f"Ошибка при удалении сообщения: {e}")
+
+        message_id = context.user_data.get("last_menu_message_id")
+        chat_id = update.effective_chat.id
+
+        sent = await context.bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=message_id,
+                text="➕ *Статус обработки СSV:*\n"
+                     f"\nПроверено: {current} из {overall} \n"
+                     "\nПожалуйста, дождитесь завершения процесса обработки CSV.\n"
+                     "\nВыберите действие:",
+                reply_markup=reply_markup,
+                parse_mode="Markdown"
+            )
+        context.user_data["last_menu_message_id"] = sent.message_id
+

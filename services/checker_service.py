@@ -43,8 +43,15 @@ class CheckerService:
             logger.error("Error while downloading file")
             return None
 
-    async def process_csv_file(self, file_data, user_id):
-        """Обрабатывает CSV файл и проверяет все номера"""
+    async def process_csv_file(self, file_data, user_id, update_progress_callback=None):
+        """
+        Обрабатывает CSV файл и проверяет все номера
+
+        Args:
+            file_data: Данные файла
+            user_id: ID пользователя
+            update_progress_callback: Функция для обновления прогресса в UI
+        """
         # Читаем CSV файл
         csv_data = self.csv_handler.read_csv_file(file_data[0])
         phone_data = self.csv_handler.extract_phone_name(csv_data)
@@ -62,12 +69,27 @@ class CheckerService:
         extracted = phone_data
         batches = [extracted[i:i + BATCH_SIZE] for i in range(0, len(extracted), BATCH_SIZE)]
 
+        total_numbers = len(extracted)
+        processed_count = 0
+
+        # Первичное обновление прогресса
+        if update_progress_callback:
+            await update_progress_callback(total_numbers, processed_count)
+
         results = []
         sem = asyncio.Semaphore(min(10, len(sessions)))  # max 10 параллельных
 
         async def worker(batch, session_data):
+            nonlocal processed_count
             async with sem:
                 await self._process_batch(batch, session_data, batch_id, user_id, results)
+                processed_count += len(batch)
+
+                # Обновляем прогресс каждые N номеров или после каждого батча,
+                # но не слишком часто чтобы не перегружать Telegram API
+                if update_progress_callback and (
+                        len(batch) >= 10 or processed_count % max(5, total_numbers // 20) == 0):
+                    await update_progress_callback(total_numbers, processed_count)
 
         tasks = []
         for idx, batch in enumerate(batches):
@@ -75,6 +97,10 @@ class CheckerService:
             tasks.append(asyncio.create_task(worker(batch, session_data)))
 
         await asyncio.gather(*tasks)
+
+        # Финальное обновление прогресса
+        if update_progress_callback:
+            await update_progress_callback(total_numbers, total_numbers)
 
         await self.checker_model.bulk_save_check_result([
             (
@@ -114,7 +140,7 @@ class CheckerService:
                         last_name=last_name or ''
                     )
 
-                    await asyncio.sleep(2)
+                    await asyncio.sleep(5)
                     response = await client(ImportContactsRequest([contact]))
                     user = response.users[0] if response.users else None
                     result = {

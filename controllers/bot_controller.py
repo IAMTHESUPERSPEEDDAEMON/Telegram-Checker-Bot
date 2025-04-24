@@ -19,7 +19,7 @@ class BotController:
     def __init__(self):
         self.state_manager = StateManager()
         self.view = TelegramView(self.state_manager)
-        self.checker = CheckerController(self.view, self.state_manager)
+        self.checker = CheckerController(self.view)
         self.session_controller = SessionController(self.view, self.state_manager)
         self.proxy_controller = ProxyController(self.view, self.state_manager)
         self.user_controller = UserController(self.view)
@@ -63,11 +63,11 @@ class BotController:
             return
         elif callback_data == "proxy_menu":
             if await is_admin(update):
-                await self.view.show_proxy_menu(update)
+                await self.view.show_proxy_menu(update, context)
             return
         elif callback_data == "session_menu":
             if await is_admin(update):
-                await self.view.show_session_menu(update)
+                await self.view.show_session_menu(update, context)
             return
 
         # Обработка действий
@@ -93,14 +93,13 @@ class BotController:
         elif callback_data == "check_sessions":
             await self.session_controller.check_sessions_command(update, context)
         elif callback_data == "assign_proxys_to_sessions":
-            # TODO: проверить работу
             await self.session_controller.assign_proxies_to_sessions_command(update, context)
 
     async def show_main_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Показывает главное меню бота с кнопками"""
         await self.user_controller.save_user_data(update)
         is_admin_user = await is_admin(update)
-        await self.view.show_main_menu(update, is_admin_user)
+        await self.view.show_main_menu(update, context, is_admin_user)
 
     async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обрабатывает команду /help"""
@@ -108,16 +107,12 @@ class BotController:
 
     async def status_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обрабатывает команду /status - показывает статус сессий и прокси"""
-        # Проверяем, является ли пользователь администратором
-        if not await is_admin(update):
-            return
-
         # Получаем статус сессий и прокси
         sessions_stats = await self.session_controller.get_sessions_stats()
         proxies_stats = await self.proxy_controller.get_proxies_stats()
 
         # Отправляем статус
-        await self.view.show_status_results_menu(update, sessions_stats['message'], proxies_stats['message'])
+        await self.view.show_status_results_menu(update, context, sessions_stats['message'], proxies_stats['message'])
 
 
     def run(self):

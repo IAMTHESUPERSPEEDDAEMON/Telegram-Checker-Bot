@@ -32,6 +32,13 @@ class SessionController:
 
     async def assign_proxies_to_sessions_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Присваивает прокси к сессиям."""
+        # Удаляем меню, которое было до этого
+        last_menu_id = context.user_data.get("last_menu_message_id")
+        if last_menu_id:
+            try:
+                await update.effective_chat.delete_message(last_menu_id)
+            except Exception as e:
+                print(f"Ошибка при удалении старого меню: {e}")
         result = await self.session_service.assign_proxies_to_sessions()
         await self.view.show_result_message(update, result)
 
