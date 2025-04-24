@@ -67,10 +67,12 @@ class CheckerController:
                     result['original_data']
                 )
 
+                # TODO: убрать эту залупу
                 if result_csv is None:
                     await self.view.send_message(update, "Произошла ошибка при создании CSV файла или ТГ не найдены")
                     return
 
+                # TODO: изменить эту хуйню на выдачу в меню
                 # Отправляем файл с результатами
                 await self.view.send_document(
                     update,
