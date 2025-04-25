@@ -33,13 +33,11 @@ class ProxyService:
         """Обновляет данные прокси в базе данных"""
         is_exists = await self.model.get_proxy_by_id(proxy_id)
         if is_exists is not None:
-            proxy_type = new_data[1]
-            host = new_data[2]
-            port = new_data[3]
-            username = new_data[4]
-            password = new_data[5]
+            login_password, host_port = new_data.split("@")
+            username, password = login_password.split(":")
+            host, port = host_port.split(":")
 
-            if await self.model.update_proxy(proxy_id, proxy_type, host, port, username, password):
+            if await self.model.update_proxy(proxy_id, proxy_type=None, host=host, port=port, username=username, password=password):
                 return {'status': 'success', 'message': f'Прокси с ID {proxy_id} был обновлен'}
             else:
                 return {'status': 'error', 'message': f'Ошибка обновления прокси {proxy_id}'}

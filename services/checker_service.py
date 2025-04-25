@@ -1,7 +1,9 @@
 import asyncio
 import csv
 import os
+from random import randint
 
+from telethon.errors import UserPrivacyRestrictedError, FloodWaitError, PhoneNumberInvalidError, RPCError
 from telethon.tl.functions.contacts import ImportContactsRequest, DeleteContactsRequest
 from telethon.tl.types import InputPhoneContact, InputUser
 
@@ -43,8 +45,15 @@ class CheckerService:
             logger.error("Error while downloading file")
             return None
 
-    async def process_csv_file(self, file_data, user_id):
-        """Обрабатывает CSV файл и проверяет все номера"""
+    async def process_csv_file(self, file_data, user_id, update_progress_callback=None):
+        """
+        Обрабатывает CSV файл и проверяет все номера
+
+        Args:
+            file_data: Данные файла
+            user_id: ID пользователя
+            update_progress_callback: Функция для обновления прогресса в UI
+        """
         # Читаем CSV файл
         csv_data = self.csv_handler.read_csv_file(file_data[0])
         phone_data = self.csv_handler.extract_phone_name(csv_data)
@@ -62,19 +71,47 @@ class CheckerService:
         extracted = phone_data
         batches = [extracted[i:i + BATCH_SIZE] for i in range(0, len(extracted), BATCH_SIZE)]
 
+        total_numbers = len(extracted)
+        processed_count = 0
+
+        # Первичное обновление прогресса
+        if update_progress_callback:
+            await update_progress_callback(total_numbers, processed_count)
+
         results = []
         sem = asyncio.Semaphore(min(10, len(sessions)))  # max 10 параллельных
 
         async def worker(batch, session_data):
-            async with sem:
-                await self._process_batch(batch, session_data, batch_id, user_id, results)
+            nonlocal processed_count
+            client = session_data['client']
+            try:
+                async with sem:
+                    await self._process_batch(batch, session_data, batch_id, user_id, results)
+            except Exception as e:
+                logger.error(f"Worker crashed for session: {str(e)}")
+            finally:
+                if client.is_connected():
+                    await client.disconnect()
+                processed_count += len(batch)
+
+                if update_progress_callback and (
+                        len(batch) >= 10 or processed_count % max(5, total_numbers // 20) == 0):
+                    await update_progress_callback(total_numbers, processed_count)
 
         tasks = []
         for idx, batch in enumerate(batches):
             session_data = sessions[idx % len(sessions)]
             tasks.append(asyncio.create_task(worker(batch, session_data)))
 
-        await asyncio.gather(*tasks)
+        try:
+            await asyncio.gather(*tasks)
+        finally:
+            for s in sessions:
+                await s['client'].disconnect()
+
+        # Финальное обновление прогресса
+        if update_progress_callback:
+            await update_progress_callback(total_numbers, total_numbers)
 
         await self.checker_model.bulk_save_check_result([
             (
@@ -90,57 +127,64 @@ class CheckerService:
 
     async def _process_batch(self, batch, session_data, batch_id, user_id, results_list):
         client = session_data['client']
-        user = ''
 
-        async with client:
-            for item in batch:
-                try:
-                    # Розбиваємо ПІБ
-                    name_parts = item['full_name'].split() if item['full_name'] else []
-                    first_name = name_parts[0] if len(name_parts) >= 1 else ''
-                    last_name = name_parts[1] if len(name_parts) >= 2 else ''
+        for item in batch:
+            result = {
+                'phone': item['phone'],
+                'full_name': item['full_name'],
+                'telegram_id': None,
+                'username': None,
+                'has_telegram': False,
+                'user_id': user_id,
+                'batch_id': batch_id
+            }
 
-                    # Якщо не вказано — генеруємо
-                    if not first_name:
-                        first_name, last_name = generate_random_name()
+            try:
+                name_parts = item['full_name'].split() if item['full_name'] else []
+                first_name = name_parts[0] if len(name_parts) >= 1 else ''
+                last_name = name_parts[1] if len(name_parts) >= 2 else ''
 
-                    # Стабільний client_id
-                    client_id = int(''.join(filter(str.isdigit, item['phone']))[-9:])
+                if not first_name:
+                    first_name, last_name = generate_random_name()
 
-                    contact = InputPhoneContact(
-                        client_id=client_id,
-                        phone=item['phone'],
-                        first_name=first_name,
-                        last_name=last_name or ''
-                    )
+                client_id = randint(1, 2_000_000_000)
 
-                    await asyncio.sleep(2)
-                    response = await client(ImportContactsRequest([contact]))
-                    user = response.users[0] if response.users else None
-                    result = {
-                        'phone': item['phone'],
-                        'full_name': item['full_name'],
-                        'telegram_id': user.id if user else None,
-                        'username': user.username if hasattr(user, 'username') else None,
-                        'has_telegram': bool(user),
-                        'user_id': user_id,
-                        'batch_id': batch_id
-                    }
-                except Exception:
-                    result = {
-                        'phone': item['phone'],
-                        'full_name': item['full_name'],
-                        'telegram_id': None,
-                        'username': None,
-                        'has_telegram': False,
-                        'user_id': user_id,
-                        'batch_id': batch_id
-                    }
+                contact = InputPhoneContact(
+                    client_id=client_id,
+                    phone=item['phone'],
+                    first_name=first_name,
+                    last_name=last_name or ''
+                )
+
+                await asyncio.sleep(randint(3, 6))  # немного случайной задержки
+
+                response = await client(ImportContactsRequest([contact]))
+
+                user = response.users[0] if response.users else None
+
                 if user:
-                    input_user = InputUser(user_id=user.id, access_hash=user.access_hash)
-                    await client(DeleteContactsRequest(id=[input_user]))
-                results_list.append(result)
-                await self.checker_model.increment_batch_counter(batch_id, result['has_telegram'])
+                    result['telegram_id'] = user.id
+                    result['username'] = getattr(user, 'username', None)
+                    result['has_telegram'] = True
+
+                    try:
+                        input_user = InputUser(user_id=user.id, access_hash=user.access_hash)
+                        await client(DeleteContactsRequest(id=[input_user]))
+                    except UserPrivacyRestrictedError:
+                        logger.warning(f"Cannot delete contact due to privacy settings: {item['phone']}")
+            except FloodWaitError as e:
+                logger.warning(f"FloodWaitError for {item['phone']}, sleeping for {e.seconds} seconds")
+                await asyncio.sleep(e.seconds)
+                continue  # повторимо обробку номера в наступному запуску (можна зробити queue retry)
+            except PhoneNumberInvalidError:
+                logger.warning(f"Invalid phone number: {item['phone']}")
+            except RPCError as e:
+                logger.error(f"Unhandled RPCError: {str(e)}")
+            except Exception as e:
+                logger.error(f"Unexpected error processing {item['phone']}: {str(e)}")
+
+            results_list.append(result)
+            await self.checker_model.increment_batch_counter(batch_id, result['has_telegram'])
 
     async def export_results_to_csv(self, batch_id, original_data):
         """Экспортирует результаты проверки в CSV файл"""

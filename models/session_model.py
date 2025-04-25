@@ -319,8 +319,8 @@ class SessionModel:
                 'total': int(result['total']),
                 'active': int(result['active']),
                 'inactive': int(result['total']) - int(result['active']),
-                'with_proxy': int(result['with_proxy']),
-                'without_proxy': int(result['total']) - int(result['with_proxy'])
+                'with proxy': int(result['with_proxy']),
+                'without proxy': int(result['total']) - int(result['with_proxy'])
             }
         except Exception as e:
             logger.error(f"Ошибка при получении статистики по сессиям: {e}")
