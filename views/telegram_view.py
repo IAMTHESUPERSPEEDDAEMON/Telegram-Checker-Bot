@@ -28,7 +28,20 @@ class TelegramView:
         reply_markup = InlineKeyboardMarkup(keyboard)
 
         if hasattr(update, 'callback_query') and update.callback_query and update.callback_query.message:
-            sent = await update.callback_query.message.edit_text(
+            message = update.callback_query.message
+            if not message.text:
+                # Удаляем меню, которое было до этого
+                await message.delete()
+                sent = await context.bot.send_message(
+                    chat_id=update.effective_chat.id,
+                    text="📱 *Главное меню*\n\nЭтот бот предназначен для проверки номеров из CSV на наличие тг\n"
+                    "\nЧтобы начать, отправь файл с номерами в формате CSV, подробности можно узнать в меню 'Помощь'\n"
+                    "\nВыберите действие:",
+                    reply_markup=reply_markup,
+                    parse_mode="Markdown"
+                )
+            else:
+                sent = await update.callback_query.message.edit_text(
                 "📱 *Главное меню*\n\nЭтот бот предназначен для проверки номеров из CSV на наличие тг\n"
                 "\nЧтобы начать, отправь файл с номерами в формате CSV, подробности можно узнать в меню 'Помощь'\n"
                 "\nВыберите действие:",
@@ -324,3 +337,15 @@ class TelegramView:
             )
         context.user_data["last_menu_message_id"] = sent.message_id
 
+    async def show_final_file(self, update: Update, context: ContextTypes.DEFAULT_TYPE, file):
+        keyboard = [[InlineKeyboardButton("⬅️ Назад в главное меню", callback_data="main_menu")]]
+
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        sent = await context.bot.send_document(
+            chat_id=update.effective_chat.id,
+            document=file,
+            caption=f"✅ *Файл CSV успешно создан!*\n\n",
+            reply_markup=reply_markup,
+            parse_mode="Markdown"
+        )

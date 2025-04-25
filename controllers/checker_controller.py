@@ -8,7 +8,7 @@ from utils.logger import Logger
 
 logger = Logger()
 
-# TODO: переделать под меню как прочие классы и проверить
+
 class CheckerController:
     def __init__(self, view):
         self.checker_service = CheckerService()
@@ -67,24 +67,26 @@ class CheckerController:
                     result['original_data']
                 )
 
-                # TODO: убрать эту залупу
                 if result_csv is None:
-                    await self.view.send_message(update, "Произошла ошибка при создании CSV файла или ТГ не найдены")
+                    await self.view.show_start_process_menu(update, context, 0)
                     return
 
-                # TODO: изменить эту хуйню на выдачу в меню
+                # Удаляем меню, которое было до этого
+                last_menu_id = context.user_data.get("last_menu_message_id")
+                if last_menu_id:
+                    try:
+                        await update.effective_chat.delete_message(last_menu_id)
+                    except Exception as e:
+                        print(f"Ошибка при удалении старого меню: {e}")
+
                 # Отправляем файл с результатами
-                await self.view.send_document(
+                await self.view.show_final_file(
                     update,
                     context,
-                    result_csv,
-                    caption=f"Найдено {found} номеров с Telegram из {processed_length}"
+                    result_csv
                 )
             else:
-                await self.view.send_message(
-                    update,
-                    "Не удалось найти номера с Telegram в вашем файле или произошла ошибка при обработке."
-                )
+                await self.view.show_start_process_menu(update, context, 0)
 
             # Очищаем контекст обработки
             if user_id in self.processing_context:
@@ -92,10 +94,6 @@ class CheckerController:
 
         except Exception as e:
             logger.error(f"Error processing CSV: {str(e)}")
-            await self.view.send_message(
-                update,
-                f"Произошла ошибка при обработке файла: {str(e)}"
-            )
             if user_id in self.processing_context:
                 del self.processing_context[user_id]
 
