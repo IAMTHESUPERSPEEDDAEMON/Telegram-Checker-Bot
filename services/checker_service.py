@@ -3,7 +3,7 @@ import csv
 import os
 from random import randint
 
-from telethon.errors import UserPrivacyRestrictedError, FloodWaitError, PhoneNumberInvalidError, RPCError
+from telethon.errors import UserPrivacyRestrictedError, FloodWaitError
 from telethon.tl.functions.contacts import ImportContactsRequest, DeleteContactsRequest
 from telethon.tl.types import InputPhoneContact, InputUser
 
@@ -84,19 +84,36 @@ class CheckerService:
         async def worker(batch, session_data):
             nonlocal processed_count
             client = session_data['client']
-            try:
-                async with sem:
-                    await self._process_batch(batch, session_data, batch_id, user_id, results)
-            except Exception as e:
-                logger.error(f"Worker crashed for session: {str(e)}")
-            finally:
-                if client.is_connected():
-                    await client.disconnect()
-                processed_count += len(batch)
+            retries = 0
+            max_retries = 3  # Максимальна кількість повторних спроб
+            success = False
 
-                if update_progress_callback and (
-                        len(batch) >= 10 or processed_count % max(5, total_numbers // 20) == 0):
-                    await update_progress_callback(total_numbers, processed_count)
+            while retries < max_retries and not success:
+                try:
+                    async with sem:
+                        await self._process_batch(batch, session_data, batch_id, user_id, results)
+                    success = True  # Якщо обробка пройшла успішно
+                except FloodWaitError as e:
+                    # Якщо помилка FloodWaitError, чекаємо вказану кількість секунд
+                    wait_time = e.seconds + 1  # додаємо 1 секунду на всяк випадок
+                    logger.warning(
+                        f"FloodWaitError: Чекаємо {wait_time} секунд перед повтором для сесії {session_data['phone']}")
+                    await asyncio.sleep(wait_time)
+                    retries += 1  # Збільшуємо лічильник спроб
+                except Exception as e:
+                    logger.error(f"Worker помилкався для сесії: {str(e)}")
+                    break  # Виходимо з циклу, якщо сталася інша помилка
+
+            # Завжди завершуємо сесію
+            if client.is_connected():
+                await client.disconnect()
+
+            processed_count += len(batch)
+
+            # Оновлюємо прогрес
+            if update_progress_callback and (
+                    len(batch) >= 10 or processed_count % max(5, total_numbers // 20) == 0):
+                await update_progress_callback(total_numbers, processed_count)
 
         tasks = []
         for idx, batch in enumerate(batches):
@@ -139,30 +156,32 @@ class CheckerService:
                 'batch_id': batch_id
             }
 
+            name_parts = item['full_name'].split() if item['full_name'] else []
+            first_name = name_parts[0] if len(name_parts) >= 1 else ''
+            last_name = name_parts[1] if len(name_parts) >= 2 else ''
+
+            if not first_name:
+                first_name, last_name = generate_random_name()
+
+            client_id = randint(1, 2_000_000_000)
+
+            contact = InputPhoneContact(
+                client_id=client_id,
+                phone=item['phone'],
+                first_name=first_name,
+                last_name=last_name or ''
+            )
+
+            await asyncio.sleep(randint(3, 8))  # Задержка между контактами
+
             try:
-                name_parts = item['full_name'].split() if item['full_name'] else []
-                first_name = name_parts[0] if len(name_parts) >= 1 else ''
-                last_name = name_parts[1] if len(name_parts) >= 2 else ''
-
-                if not first_name:
-                    first_name, last_name = generate_random_name()
-
-                client_id = randint(1, 2_000_000_000)
-
-                contact = InputPhoneContact(
-                    client_id=client_id,
-                    phone=item['phone'],
-                    first_name=first_name,
-                    last_name=last_name or ''
-                )
-
-                await asyncio.sleep(randint(3, 6))  # немного случайной задержки
-
                 response = await client(ImportContactsRequest([contact]))
 
-                user = response.users[0] if response.users else None
+                # Логирование ответа от Telegram
+                logger.info(f"Response for phone {item['phone']}: {response}")
 
-                if user:
+                if response and response.users:
+                    user = response.users[0]
                     result['telegram_id'] = user.id
                     result['username'] = getattr(user, 'username', None)
                     result['has_telegram'] = True
@@ -172,16 +191,18 @@ class CheckerService:
                         await client(DeleteContactsRequest(id=[input_user]))
                     except UserPrivacyRestrictedError:
                         logger.warning(f"Cannot delete contact due to privacy settings: {item['phone']}")
+                else:
+                    logger.warning(f"No user found for phone {item['phone']}")
+
             except FloodWaitError as e:
-                logger.warning(f"FloodWaitError for {item['phone']}, sleeping for {e.seconds} seconds")
-                await asyncio.sleep(e.seconds)
-                continue  # повторимо обробку номера в наступному запуску (можна зробити queue retry)
-            except PhoneNumberInvalidError:
-                logger.warning(f"Invalid phone number: {item['phone']}")
-            except RPCError as e:
-                logger.error(f"Unhandled RPCError: {str(e)}")
+                # Задержка при ошибке FloodWaitError
+                wait_time = e.seconds + 1
+                logger.warning(
+                    f"FloodWaitError: Чекаємо {wait_time} секунд перед повтором для сесії {session_data['phone']}")
+                await asyncio.sleep(wait_time)
+                continue  # Повторим обработку этого контакта после задержки
             except Exception as e:
-                logger.error(f"Unexpected error processing {item['phone']}: {str(e)}")
+                logger.error(f"Error processing phone {item['phone']}: {str(e)}")
 
             results_list.append(result)
             await self.checker_model.increment_batch_counter(batch_id, result['has_telegram'])

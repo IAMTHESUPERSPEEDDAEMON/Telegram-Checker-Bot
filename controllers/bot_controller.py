@@ -84,7 +84,6 @@ class BotController:
         elif callback_data == "check_proxies":
             await self.proxy_controller.check_proxies_command(update, context)
         elif callback_data == "add_session":
-            # TODO: проверить добавление сессии и сделать возможность отменить процесс
             await self.session_controller.add_session_command(update, context)
         elif callback_data == "update_session":
             await self.session_controller.update_session_command(update, context)
