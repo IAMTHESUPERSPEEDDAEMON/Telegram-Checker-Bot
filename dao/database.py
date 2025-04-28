@@ -69,7 +69,7 @@ class DatabaseManager:
             )
             """,
             """
-            CREATE TABLE IF NOT EXISTS check_results (
+                CREATE TABLE IF NOT EXISTS check_results (
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 phone VARCHAR(20) NOT NULL,
                 full_name VARCHAR(255),
@@ -78,6 +78,7 @@ class DatabaseManager:
                 has_telegram BOOLEAN DEFAULT FALSE,
                 user_id INT NOT NULL,
                 checked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                batch_id INT NOT NULL,
                 FOREIGN KEY (batch_id) REFERENCES check_batches(id) ON DELETE CASCADE
             )
             """,
