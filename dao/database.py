@@ -69,20 +69,6 @@ class DatabaseManager:
             )
             """,
             """
-                CREATE TABLE IF NOT EXISTS check_results (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                phone VARCHAR(20) NOT NULL,
-                full_name VARCHAR(255),
-                telegram_id BIGINT,
-                username VARCHAR(255),
-                has_telegram BOOLEAN DEFAULT FALSE,
-                user_id INT NOT NULL,
-                checked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                batch_id INT NOT NULL,
-                FOREIGN KEY (batch_id) REFERENCES check_batches(id) ON DELETE CASCADE
-            )
-            """,
-            """
             CREATE TABLE IF NOT EXISTS check_batches (
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 user_id INT NOT NULL,
@@ -96,7 +82,22 @@ class DatabaseManager:
                 completed_at TIMESTAMP NULL,
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
             )
+            """,
             """
+                CREATE TABLE IF NOT EXISTS check_results (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                phone VARCHAR(20) NOT NULL,
+                full_name VARCHAR(255),
+                telegram_id BIGINT,
+                username VARCHAR(255),
+                has_telegram BOOLEAN DEFAULT FALSE,
+                user_id INT NOT NULL,
+                checked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                batch_id INT NOT NULL,
+                FOREIGN KEY (batch_id) REFERENCES check_batches(id) ON DELETE CASCADE
+            )
+            """
+
         ]
 
         connection = self.get_connection()
