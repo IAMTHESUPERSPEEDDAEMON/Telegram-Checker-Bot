@@ -117,7 +117,7 @@ class SessionController:
             self._session_data.pop(user_id, None)
         except Exception as e:
             print(f"Ошибка при добавлении сессии: {e}")
-            await self.view.show_custom_menu(update, str(e))
+            await self.view.show_custom_menu(update,context, str(e))
             self.state_manager.clear_state(user_id)
             self._session_data.pop(user_id, None)
 
