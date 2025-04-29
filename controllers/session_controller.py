@@ -85,7 +85,7 @@ class SessionController:
     async def _start_session_flow(self, update, context, user_id):
         data = self._session_data[user_id]
 
-        async def code_callback():
+        async def code_callback(phone_number=None, phone_code_hash=None):
             future = asyncio.Future()
             self._session_data[user_id]["waiting_code"] = future
             return await future
