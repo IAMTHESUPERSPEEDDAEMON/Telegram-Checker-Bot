@@ -349,3 +349,17 @@ class TelegramView:
             reply_markup=reply_markup,
             parse_mode="Markdown"
         )
+
+    async def show_custom_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text):
+        """Отправляет кастомное сообщение"""
+        keyboard = [[InlineKeyboardButton("⬅️ Назад в главное меню", callback_data="main_menu")]]
+
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        sent = await update.callback_query.message.edit_text(
+            f"\n{text} \n"
+            "\nВыберите действие:",
+            reply_markup=reply_markup,
+            parse_mode="Markdown"
+        )
+        context.user_data["last_menu_message_id"] = sent.message_id

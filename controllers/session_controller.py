@@ -97,22 +97,30 @@ class SessionController:
             await self.view.show_get_session_code_menu(update, phone)
             return await future
 
-        result = await self.session_service.add_session(
-            data["phone"], data["api_id"], data["api_hash"],
-            code_callback=code_callback,
-            password_callback=password_callback
-        )
-        print(result)
-        # Удаляем меню, которое было до этого
-        last_menu_id = context.user_data.get("last_menu_message_id")
-        if last_menu_id:
-            try:
-                await update.effective_chat.delete_message(last_menu_id)
-            except Exception as e:
-                print(f"Ошибка при удалении старого меню: {e}")
-        await self.view.show_result_message(update, result)
-        self.state_manager.clear_state(user_id)
-        self._session_data.pop(user_id, None)
+        try:
+            result = await self.session_service.add_session(
+                data["phone"], data["api_id"], data["api_hash"],
+                code_callback=code_callback,
+                password_callback=password_callback
+            )
+            print(result)
+            # Удаляем меню, которое было до этого
+            last_menu_id = context.user_data.get("last_menu_message_id")
+            if last_menu_id:
+                try:
+                    await update.effective_chat.delete_message(last_menu_id)
+                except Exception as e:
+                    print(f"Ошибка при удалении старого меню: {e}")
+            await self.view.show_result_message(update, result)
+            # очистка состояния диалога
+            self.state_manager.clear_state(user_id)
+            self._session_data.pop(user_id, None)
+        except Exception as e:
+            print(f"Ошибка при добавлении сессии: {e}")
+            await self.view.show_custom_menu(update, str(e))
+        finally:
+            self.state_manager.clear_state(user_id)
+            self._session_data.pop(user_id, None)
 
     async def handle_delete_session_input(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         message_text = update.message.text.strip()
