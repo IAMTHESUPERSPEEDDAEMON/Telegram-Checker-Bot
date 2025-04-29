@@ -94,7 +94,7 @@ class SessionController:
             future = asyncio.Future()
             self._session_data[user_id]["waiting_password"] = future
             self.state_manager.set_state(user_id, "AWAITING_2FA_INPUT_FOR_SESSION")
-            self.view.show_get_session_code_menu(update, phone)
+            await self.view.show_get_session_code_menu(update, phone)
             return await future
 
         result = await self.session_service.add_session(
