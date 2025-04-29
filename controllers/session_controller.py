@@ -117,6 +117,14 @@ class SessionController:
             self._session_data.pop(user_id, None)
         except Exception as e:
             print(f"Ошибка при добавлении сессии: {e}")
+            # Удаляем меню, которое было до этого
+            last_menu_id = context.user_data.get("last_menu_message_id")
+            if last_menu_id:
+                try:
+                    await update.effective_chat.delete_message(last_menu_id)
+                except Exception as e:
+                    print(f"Ошибка при удалении старого меню: {e}")
+            await self.view.show_result_message(update, result)
             await self.view.show_custom_menu(update,context, str(e))
             self.state_manager.clear_state(user_id)
             self._session_data.pop(user_id, None)
