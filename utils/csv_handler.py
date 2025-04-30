@@ -1,5 +1,6 @@
 import csv
 import os
+import chardet
 
 from config.config import TEMP_DIR
 from utils.logger import Logger
@@ -24,13 +25,20 @@ class CSVHandler:
 
     @staticmethod
     def read_csv_file(file_path):
-        """Читает CSV файл и возвращает данные"""
+        """Читает CSV файл и возвращает данные с автоопределением кодировки"""
         try:
-            with open(file_path, 'r', encoding='utf-8') as f:
+            # Определяем кодировку файла
+            with open(file_path, 'rb') as f:
+                raw_data = f.read()
+                result = chardet.detect(raw_data)
+                encoding = result['encoding'] or 'utf-8'  # если не удалось определить — используем utf-8
+
+            with open(file_path, 'r', encoding=encoding, errors='replace') as f:
                 reader = csv.reader(f)
-                header = next(reader, None)  # Пытаемся прочитать заголовок
+                header = next(reader, None)
                 rows = list(reader)
 
+            logger.info(f"Read CSV file {file_path} using encoding: {encoding}")
             return {
                 'header': header,
                 'rows': rows,
@@ -38,6 +46,7 @@ class CSVHandler:
             }
         except Exception as e:
             logger.error(f"Error reading CSV file {file_path}: {e}")
+            raise
 
     @staticmethod
     def extract_phone_name(csv_data):
