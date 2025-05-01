@@ -86,7 +86,9 @@ class SessionService:
                 string_session,
                 session['api_id'],
                 session['api_hash'],
-                proxy=proxy
+                proxy=proxy,
+                connection_retries=2,
+                timeout=20  # seconds
             )
             # Подключаемся
             await client.connect()
@@ -215,7 +217,9 @@ class SessionService:
                     string_session,
                     session['api_id'],
                     session['api_hash'],
-                    proxy=proxy
+                    proxy=proxy,
+                    connection_retries=2,
+                    timeout=20  # seconds
                 )
 
                 await client.connect()
