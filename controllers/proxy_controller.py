@@ -23,6 +23,13 @@ class ProxyController:
 
     async def check_proxies_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         result = await self.proxy_service.check_all_proxies()
+        # Удаляем меню, которое было до этого
+        last_menu_id = context.user_data.get("last_menu_message_id")
+        if last_menu_id:
+            try:
+                await update.effective_chat.delete_message(last_menu_id)
+            except Exception as e:
+                print(f"Ошибка при удалении старого меню: {e}")
         await self.view.show_result_message(update, result)
 
     async def get_proxies_stats(self):

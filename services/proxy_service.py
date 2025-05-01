@@ -1,11 +1,14 @@
 import asyncio
-import aiohttp
+import requests
+
+from concurrent.futures import ThreadPoolExecutor
 from models.proxy_model import ProxyModel
 
 class ProxyService:
     def __init__(self):
-        self.test_url = 'https://check-host.net/ip'
+        self.test_url = 'https://google.com'
         self.model = ProxyModel()
+        self.executor = ThreadPoolExecutor(max_workers=10)  # Пул потоков для синхронных операций
 
     async def delete_by_id(self, proxy_id):
         """Удаляет прокси по его ID"""
@@ -64,7 +67,6 @@ class ProxyService:
             tasks = []
             for proxy in batch:
                 task = self._test_proxy_connection(
-                    proxy_id=proxy['id'],
                     proxy_type=proxy['type'],
                     host=proxy['host'],
                     port=proxy['port'],
@@ -99,22 +101,35 @@ class ProxyService:
         return {'status': 'success', 'message': f"Проверка прокси завершена.\nВсего проверенно: {results['total']},\nрабочих: {results['working']},\nне рабочих: {results['failed']}"}
 
 
-    async def _test_proxy_connection(self, proxy_id, proxy_type, host, port, username, password):
-        """Проверяет соединение с прокси"""
-        # Формируем URL прокси
-        if proxy_type == 'http':
+    async def _test_proxy_connection(self, proxy_type, host, port, username, password):
+        """Проверяет соединение с прокси через requests"""
+        if proxy_type == 'http' or proxy_type == 'https':
             proxy_url = f"http://{username}:{password}@{host}:{port}"
         elif proxy_type == 'socks5':
             proxy_url = f"socks5://{username}:{password}@{host}:{port}"
         else:
             return False
 
+        # Вызов синхронной функции в асинхронном контексте через run_in_executor
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(self.executor, self._sync_test_proxy_connection, proxy_url)
+        return result
+
+    def _sync_test_proxy_connection(self, proxy_url):
+        """Синхронно проверяет соединение с прокси через requests"""
+        proxies = {
+            'http': proxy_url,
+            'https': proxy_url,
+            'socks5': proxy_url
+        }
+
         try:
-            # Пробуем сделать запрос через прокси
-            async with aiohttp.ClientSession() as session:
-                async with session.get(self.test_url, proxy=proxy_url, timeout=10) as response:
-                    return response.status == 200
-        except Exception as e:
+            print(f"Connecting to proxy {proxy_url}...")  # Логирование перед запросом
+            response = requests.get(self.test_url, proxies=proxies, timeout=10)
+            print(f"Response status code: {response.status_code}")  # Логируем статус код
+            return response.status_code == 200
+        except requests.RequestException as e:
+            print(f"Ошибка при подключении к прокси {proxy_url}: {e}")
             return False
 
 
