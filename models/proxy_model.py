@@ -157,9 +157,10 @@ class ProxyModel:
     async def format_proxy_for_telethon(self, proxy):
         """Форматирует прокси для использования в Telethon"""
         proxy_dict = None
+        print(proxy)
         if proxy['type'] == 'http':
             proxy_dict = {
-                'proxy_type': 'HTTP',
+                'proxy_type': 'http',
                 'addr': proxy['host'],
                 'port': proxy['port'],
                 'username': proxy['username'],
@@ -167,7 +168,7 @@ class ProxyModel:
             }
         elif proxy['type'] == 'socks5':
             proxy_dict = {
-                'proxy_type': 'SOCKS5',
+                'proxy_type': 'socks5',
                 'addr': proxy['host'],
                 'port': proxy['port'],
                 'username': proxy['username'],
