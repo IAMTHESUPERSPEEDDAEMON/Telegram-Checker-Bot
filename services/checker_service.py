@@ -69,6 +69,8 @@ class CheckerService:
             raise Exception("Нету доступных сессий Telegram")
 
         extracted = phone_data
+        # Уменьшим размер батча для более частой ротации сессий
+        BATCH_SIZE = 30  # Меньший размер батча
         batches = [extracted[i:i + BATCH_SIZE] for i in range(0, len(extracted), BATCH_SIZE)]
 
         total_numbers = len(extracted)
@@ -79,52 +81,110 @@ class CheckerService:
             await update_progress_callback(total_numbers, processed_count)
 
         results = []
-        sem = asyncio.Semaphore(min(10, len(sessions)))  # max 10 параллельных
+        # Ограничиваем количество параллельных запросов
+        sem = asyncio.Semaphore(min(5, len(sessions)))  # Уменьшено с 10 до 5 для снижения нагрузки
 
-        async def worker(batch, session_data):
+        async def worker(batch, session_idx):
             nonlocal processed_count
-            client = session_data['client']
-            retries = 0
-            max_retries = 3  # Максимальна кількість повторних спроб
-            success = False
 
-            while retries < max_retries and not success:
+            # Получаем сессию для этого пакета
+            session_data = sessions[session_idx % len(sessions)]
+            client = session_data['client']
+
+            retries = 0
+            max_retries = 3  # Максимальное количество повторных попыток
+
+            for attempt in range(max_retries):
                 try:
+                    # Проверяем соединение перед обработкой батча
+                    if not client.is_connected():
+                        logger.info(
+                            f"Переподключение клиента для сессии {session_data['phone']} перед обработкой батча")
+                        await client.connect()
+                        # Проверяем авторизацию после повторного подключения
+                        if not await client.is_user_authorized():
+                            logger.error(f"Клиент не авторизован после подключения: {session_data['phone']}")
+                            return  # Пропускаем этот батч, если авторизация не удалась
+
                     async with sem:
                         await self._process_batch(batch, session_data, batch_id, user_id, results)
-                    success = True  # Якщо обробка пройшла успішно
+                    break  # Если обработка прошла успешно, выходим из цикла попыток
+
                 except FloodWaitError as e:
-                    # Якщо помилка FloodWaitError, чекаємо вказану кількість секунд
-                    wait_time = e.seconds + 1  # додаємо 1 секунду на всяк випадок
+                    # Если ошибка FloodWaitError, ждем указанное количество секунд
+                    wait_time = e.seconds + 1  # добавляем 1 секунду для надежности
                     logger.warning(
-                        f"FloodWaitError: Чекаємо {wait_time} секунд перед повтором для сесії {session_data['phone']}")
+                        f"FloodWaitError: Ждем {wait_time} секунд перед повтором для сессии {session_data['phone']}")
                     await asyncio.sleep(wait_time)
-                    retries += 1  # Збільшуємо лічильник спроб
+
+                    # После ожидания проверяем соединение
+                    if not client.is_connected():
+                        await client.connect()
+
+                except ConnectionError as e:
+                    # Обработка ошибок соединения
+                    logger.error(f"Ошибка соединения для сессии {session_data['phone']}: {str(e)}")
+
+                    # Пробуем переподключиться
+                    try:
+                        if client.is_connected():
+                            await client.disconnect()
+                        await asyncio.sleep(2)  # Небольшая пауза перед переподключением
+                        await client.connect()
+                    except Exception as reconnect_error:
+                        logger.error(f"Не удалось переподключиться: {str(reconnect_error)}")
+
+                    # Если последняя попытка - выходим
+                    if attempt == max_retries - 1:
+                        logger.error(f"Исчерпаны попытки для батча после ошибки соединения")
+                        return
+
                 except Exception as e:
-                    logger.error(f"Worker помилкався для сесії: {str(e)}")
-                    break  # Виходимо з циклу, якщо сталася інша помилка
+                    logger.error(f"Worker ошибка: {str(e)}")
 
-            # Завжди завершуємо сесію
-            if client.is_connected():
-                await client.disconnect()
+                    # Проверяем содержит ли ошибка текст о разъединении
+                    if "disconnected" in str(e).lower():
+                        try:
+                            # Пробуем переподключиться
+                            if client.is_connected():
+                                await client.disconnect()
+                            await asyncio.sleep(2)
+                            await client.connect()
+                            logger.info(f"Успешно переподключились после ошибки: {session_data['phone']}")
+                        except Exception as reconnect_error:
+                            logger.error(f"Ошибка при переподключении: {str(reconnect_error)}")
+                            # Если последняя попытка - выходим
+                            if attempt == max_retries - 1:
+                                return
+                    else:
+                        # Для других ошибок просто логируем и продолжаем
+                        if attempt == max_retries - 1:
+                            logger.error(f"Не удалось обработать батч после {max_retries} попыток: {str(e)}")
+                            return
 
+            # Обновляем счетчик обработанных номеров
             processed_count += len(batch)
 
-            # Оновлюємо прогрес
+            # Обновляем прогресс
             if update_progress_callback and (
                     len(batch) >= 10 or processed_count % max(5, total_numbers // 20) == 0):
                 await update_progress_callback(total_numbers, processed_count)
 
         tasks = []
         for idx, batch in enumerate(batches):
-            session_data = sessions[idx % len(sessions)]
-            tasks.append(asyncio.create_task(worker(batch, session_data)))
+            # Используем индекс батча для выбора сессии, обеспечивая ротацию
+            tasks.append(asyncio.create_task(worker(batch, idx)))
 
         try:
             await asyncio.gather(*tasks)
         finally:
+            # Корректно закрываем все клиенты
             for s in sessions:
-                await s['client'].disconnect()
+                try:
+                    if s['client'].is_connected():
+                        await s['client'].disconnect()
+                except Exception as e:
+                    logger.error(f"Ошибка при отключении клиента: {str(e)}")
 
         # Финальное обновление прогресса
         if update_progress_callback:
@@ -145,7 +205,21 @@ class CheckerService:
     async def _process_batch(self, batch, session_data, batch_id, user_id, results_list):
         client = session_data['client']
 
+        # Проверяем соединение перед началом обработки батча
+        if not client.is_connected():
+            logger.info(f"Подключение клиента для сессии {session_data['phone']} перед обработкой батча")
+            await client.connect()
+
         for item in batch:
+            # Проверяем соединение перед каждым контактом
+            if not client.is_connected():
+                logger.info(f"Переподключение для сессии {session_data['phone']} при обработке номера {item['phone']}")
+                await client.connect()
+                # Проверяем, что переподключение успешно
+                if not client.is_connected():
+                    logger.error(f"Не удалось переподключиться при обработке номера {item['phone']}")
+                    continue
+
             result = {
                 'phone': item['phone'],
                 'full_name': item['full_name'],
@@ -172,9 +246,17 @@ class CheckerService:
                 last_name=last_name or ''
             )
 
-            await asyncio.sleep(randint(3, 8))  # Задержка между контактами
+            # Применяем случайную задержку между запросами для минимизации рисков блокировки
+            delay = randint(3, 10)  # Увеличенная случайная задержка
+            await asyncio.sleep(delay)
 
             try:
+                # Если у нас более 20 контактов в батче, делаем дополнительную задержку каждые 20 контактов
+                if batch.index(item) > 0 and batch.index(item) % 20 == 0:
+                    longer_delay = randint(10, 20)
+                    logger.info(f"Делаем дополнительную паузу {longer_delay} сек после 20 контактов")
+                    await asyncio.sleep(longer_delay)
+
                 response = await client(ImportContactsRequest([contact]))
 
                 # Логирование ответа от Telegram
@@ -191,6 +273,8 @@ class CheckerService:
                         await client(DeleteContactsRequest(id=[input_user]))
                     except UserPrivacyRestrictedError:
                         logger.warning(f"Cannot delete contact due to privacy settings: {item['phone']}")
+                    except Exception as delete_error:
+                        logger.warning(f"Ошибка при удалении контакта {item['phone']}: {str(delete_error)}")
                 else:
                     logger.warning(f"No user found for phone {item['phone']}")
 
@@ -198,11 +282,44 @@ class CheckerService:
                 # Задержка при ошибке FloodWaitError
                 wait_time = e.seconds + 1
                 logger.warning(
-                    f"FloodWaitError: Чекаємо {wait_time} секунд перед повтором для сесії {session_data['phone']}")
+                    f"FloodWaitError: Ждем {wait_time} секунд перед повтором для сессии {session_data['phone']}")
                 await asyncio.sleep(wait_time)
+                # После ожидания проверяем/восстанавливаем соединение
+                if not client.is_connected():
+                    await client.connect()
                 continue  # Повторим обработку этого контакта после задержки
+
+            except ConnectionError as conn_error:
+                logger.error(f"Ошибка соединения при обработке {item['phone']}: {str(conn_error)}")
+                # Пытаемся переподключиться
+                try:
+                    if client.is_connected():
+                        await client.disconnect()
+                    await asyncio.sleep(2)
+                    await client.connect()
+                    logger.info(f"Переподключение выполнено для {session_data['phone']}")
+                    continue  # Пробуем еще раз с этим же номером
+                except Exception as e:
+                    logger.error(f"Не удалось переподключиться после ошибки соединения: {str(e)}")
+                    break  # Завершаем обработку батча
+
             except Exception as e:
-                logger.error(f"Error processing phone {item['phone']}: {str(e)}")
+                # Проверяем, связана ли ошибка с отключением
+                if "disconnected" in str(e).lower():
+                    logger.error(f"Сессия отключена для {item['phone']}: {str(e)}")
+                    try:
+                        # Пробуем переподключиться
+                        if client.is_connected():
+                            await client.disconnect()
+                        await asyncio.sleep(2)
+                        await client.connect()
+                        logger.info(f"Переподключение выполнено для {session_data['phone']}")
+                        continue  # Пробуем еще раз с этим же номером
+                    except Exception as reconnect_error:
+                        logger.error(f"Не удалось переподключиться: {str(reconnect_error)}")
+                        break  # Завершаем обработку батча
+                else:
+                    logger.error(f"Error processing phone {item['phone']}: {str(e)}")
 
             results_list.append(result)
             await self.checker_model.increment_batch_counter(batch_id, result['has_telegram'])
