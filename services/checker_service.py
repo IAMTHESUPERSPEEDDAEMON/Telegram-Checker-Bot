@@ -247,13 +247,13 @@ class CheckerService:
             )
 
             # Применяем случайную задержку между запросами для минимизации рисков блокировки
-            delay = randint(3, 10)  # Увеличенная случайная задержка
+            delay = randint(5, 15)  # Увеличенная случайная задержка
             await asyncio.sleep(delay)
 
             try:
                 # Если у нас более 20 контактов в батче, делаем дополнительную задержку каждые 20 контактов
                 if batch.index(item) > 0 and batch.index(item) % 20 == 0:
-                    longer_delay = randint(10, 20)
+                    longer_delay = randint(15, 30)
                     logger.info(f"Делаем дополнительную паузу {longer_delay} сек после 20 контактов")
                     await asyncio.sleep(longer_delay)
 
