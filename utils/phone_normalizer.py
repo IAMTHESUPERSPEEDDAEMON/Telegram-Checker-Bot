@@ -9,6 +9,9 @@ def normalize_phone_number(phone_number):
             if normalized_phone.startswith('8') and len(normalized_phone) == 11:
                 # Заменяем 8 на 7 для российских номеров
                 normalized_phone = '+7' + normalized_phone[1:]
+            if normalized_phone.startswith('9') and len(normalized_phone) == 10:
+                # Добавляем +7 к номеру
+                normalized_phone = '+7' + normalized_phone
             else:
                 normalized_phone = '+' + normalized_phone
 
