@@ -303,24 +303,6 @@ class CheckerService:
                     logger.error(f"Не удалось переподключиться после ошибки соединения: {str(e)}")
                     break  # Завершаем обработку батча
 
-            except Exception as e:
-                # Проверяем, связана ли ошибка с отключением
-                if "disconnected" in str(e).lower():
-                    logger.error(f"Сессия отключена для {item['phone']}: {str(e)}")
-                    try:
-                        # Пробуем переподключиться
-                        if client.is_connected():
-                            await client.disconnect()
-                        await asyncio.sleep(2)
-                        await client.connect()
-                        logger.info(f"Переподключение выполнено для {session_data['phone']}")
-                        continue  # Пробуем еще раз с этим же номером
-                    except Exception as reconnect_error:
-                        logger.error(f"Не удалось переподключиться: {str(reconnect_error)}")
-                        break  # Завершаем обработку батча
-                else:
-                    logger.error(f"Error processing phone {item['phone']}: {str(e)}")
-
             results_list.append(result)
             await self.checker_model.increment_batch_counter(batch_id, result['has_telegram'])
 
